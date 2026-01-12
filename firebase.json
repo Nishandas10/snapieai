@@ -1,0 +1,48 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "cal-track-ai",
+          "appId": "1:556342312134:android:9d0b0df8756bfd27022bc7",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "cal-track-ai",
+          "configurations": {
+            "android": "1:556342312134:android:9d0b0df8756bfd27022bc7",
+            "ios": "1:556342312134:ios:cebb7a93851666fd022bc7",
+            "macos": "1:556342312134:ios:cebb7a93851666fd022bc7",
+            "web": "1:556342312134:web:1dabf3b4bfa0fd41022bc7",
+            "windows": "1:556342312134:web:b3a2978c8d3ee030022bc7"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "project_info": {
+    "project_number": "556342312134",
+    "project_id": "cal-track-ai",
+    "storage_bucket": "cal-track-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:556342312134:android:9d0b0df8756bfd27022bc7",
+        "android_client_info": {
+          "package_name": "com.Five_Point_AI_Labs.CalTrackAI"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "556342312134-56g84fmat5hgm9oo4bvdvaqrnlg2k5n3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.Five_Point_AI_Labs.CalTrackAI",
+            "certificate_hash": "4520467b8a578054e2f500fb753200da47629446"
+          }
+        },
+        {
+          "client_id": "556342312134-lcu5qhhtcj2781lcenf5muvrs55fhmfb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.Five_Point_AI_Labs.CalTrackAI",
+            "certificate_hash": "5f0cb3a6312b675dd801299133d33f7621fda820"
+          }
+        },
+        {
+          "client_id": "556342312134-4tmbu6c900dnctmi2c1b60b7ntqlcfn0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChUY5k3_jYnGOtsp5JbP5mIE-3eYyCIRM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "556342312134-4tmbu6c900dnctmi2c1b60b7ntqlcfn0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "556342312134-78u1ptrn0o79mneg272g0nka0f4ihcol.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.FivePointAILabs.caltrackai"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
