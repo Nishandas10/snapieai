@@ -23,7 +23,6 @@ class FoodLogScreen extends ConsumerStatefulWidget {
 class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
@@ -41,11 +40,16 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
     super.dispose();
   }
 
+  void _onDateChanged(DateTime date) {
+    ref.read(foodLogProvider.notifier).selectDate(date);
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
     final foodLogState = ref.watch(foodLogProvider);
-    final todayLog = foodLogState.todayLog;
+    final selectedDate = foodLogState.selectedDate;
+    final currentLog = foodLogState.currentLog;
 
     final calorieTarget = profile?.dailyCalorieTarget ?? 2000;
 
@@ -61,10 +65,8 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: _DateSelector(
-            selectedDate: _selectedDate,
-            onDateChanged: (date) {
-              setState(() => _selectedDate = date);
-            },
+            selectedDate: selectedDate,
+            onDateChanged: _onDateChanged,
           ),
         ),
       ),
@@ -79,11 +81,11 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
               children: [
                 _CalorieStat(
                   label: 'Eaten',
-                  value: todayLog?.totalCalories.toInt() ?? 0,
+                  value: currentLog?.totalCalories.toInt() ?? 0,
                   color: AppColors.primary,
                 ),
                 NutritionProgress(
-                  current: todayLog?.totalCalories ?? 0,
+                  current: currentLog?.totalCalories ?? 0,
                   target: calorieTarget,
                   label: 'Remaining',
                   unit: 'kcal',
@@ -127,7 +129,7 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
               children: MealType.values.map((type) {
                 return _MealTabContent(
                   mealType: type,
-                  meal: todayLog?.getMeal(type),
+                  meal: currentLog?.getMeal(type),
                   onAddFood: () => _addFood(type),
                   onDeleteFood: (foodId) => _deleteFood(type, foodId),
                   onTapFood: (food) => _viewFoodDetails(type, food),
@@ -145,7 +147,10 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
   }
 
   void _deleteFood(MealType mealType, String foodId) {
-    ref.read(foodLogProvider.notifier).removeFoodFromMeal(mealType, foodId);
+    final selectedDate = ref.read(foodLogProvider).selectedDate;
+    ref
+        .read(foodLogProvider.notifier)
+        .removeFoodFromMeal(mealType, foodId, date: selectedDate);
   }
 
   void _viewFoodDetails(MealType mealType, FoodItem food) {

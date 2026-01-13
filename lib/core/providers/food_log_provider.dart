@@ -12,32 +12,58 @@ class DailyLogState {
   final Map<String, DailyLog> logHistory;
   final bool isLoading;
   final String? error;
+  final DateTime selectedDate;
+  final DailyLog? selectedDateLog;
 
-  const DailyLogState({
+  DailyLogState({
     this.todayLog,
     this.logHistory = const {},
     this.isLoading = false,
     this.error,
-  });
+    DateTime? selectedDate,
+    this.selectedDateLog,
+  }) : selectedDate = selectedDate ?? DateTime.now();
 
   DailyLogState copyWith({
     DailyLog? todayLog,
     Map<String, DailyLog>? logHistory,
     bool? isLoading,
     String? error,
+    DateTime? selectedDate,
+    DailyLog? selectedDateLog,
+    bool clearSelectedDateLog = false,
   }) {
     return DailyLogState(
       todayLog: todayLog ?? this.todayLog,
       logHistory: logHistory ?? this.logHistory,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      selectedDate: selectedDate ?? this.selectedDate,
+      selectedDateLog: clearSelectedDateLog
+          ? null
+          : (selectedDateLog ?? this.selectedDateLog),
     );
+  }
+
+  /// Get the log for the currently selected date
+  DailyLog? get currentLog {
+    final todayKey = _getDateKey(DateTime.now());
+    final selectedKey = _getDateKey(selectedDate);
+
+    if (todayKey == selectedKey) {
+      return todayLog;
+    }
+    return selectedDateLog ?? logHistory[selectedKey];
+  }
+
+  String _getDateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }
 
 /// Food log state notifier
 class FoodLogNotifier extends StateNotifier<DailyLogState> {
-  FoodLogNotifier() : super(const DailyLogState()) {
+  FoodLogNotifier() : super(DailyLogState()) {
     _loadTodayLog();
   }
 
@@ -156,6 +182,70 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
     );
 
     return DailyLog(id: dateKey, date: date, meals: mealsList);
+  }
+
+  /// Select a specific date and load its data
+  Future<void> selectDate(DateTime date) async {
+    final dateKey = _getDateKey(date);
+    final todayKey = _getDateKey(DateTime.now());
+
+    state = state.copyWith(
+      selectedDate: date,
+      isLoading: true,
+      clearSelectedDateLog: true,
+    );
+
+    // If it's today, use todayLog
+    if (dateKey == todayKey) {
+      state = state.copyWith(isLoading: false, selectedDateLog: state.todayLog);
+      return;
+    }
+
+    // Check cache first
+    if (state.logHistory.containsKey(dateKey)) {
+      state = state.copyWith(
+        isLoading: false,
+        selectedDateLog: state.logHistory[dateKey],
+      );
+      return;
+    }
+
+    // Load from local storage
+    final localData = StorageService.getFoodLog(dateKey);
+    if (localData != null) {
+      final log = DailyLog.fromJson(localData);
+      state = state.copyWith(
+        logHistory: {...state.logHistory, dateKey: log},
+        selectedDateLog: log,
+        isLoading: false,
+      );
+    } else {
+      // Create empty log for that date
+      final emptyLog = DailyLog.empty(date);
+      state = state.copyWith(selectedDateLog: emptyLog, isLoading: false);
+    }
+
+    // Try to sync from Firestore if authenticated
+    final user = FirebaseService.currentUser;
+    if (user != null) {
+      try {
+        final firestoreData = await FirebaseService.getFoodLog(
+          user.uid,
+          dateKey,
+        );
+        if (firestoreData != null) {
+          final log = _logFromFirestore(dateKey, firestoreData);
+          state = state.copyWith(
+            logHistory: {...state.logHistory, dateKey: log},
+            selectedDateLog: log,
+          );
+          // Update local cache
+          await StorageService.saveFoodLog(dateKey, log.toJson());
+        }
+      } catch (e) {
+        debugPrint('[FoodLogProvider] Failed to load from Firestore: $e');
+      }
+    }
   }
 
   Future<DailyLog> getOrCreateLog(DateTime date) async {
@@ -382,10 +472,53 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
   ) async {
     final logs = <DailyLog>[];
     var current = start;
+    final user = FirebaseService.currentUser;
 
     while (!current.isAfter(end)) {
-      final log = await getOrCreateLog(current);
-      logs.add(log);
+      final dateKey = _getDateKey(current);
+
+      // Try to load from cache first
+      DailyLog? log;
+
+      if (dateKey == _getDateKey(DateTime.now()) && state.todayLog != null) {
+        log = state.todayLog;
+      } else if (state.logHistory.containsKey(dateKey)) {
+        log = state.logHistory[dateKey];
+      } else {
+        // Try local storage
+        final localData = StorageService.getFoodLog(dateKey);
+        if (localData != null) {
+          log = DailyLog.fromJson(localData);
+          state = state.copyWith(
+            logHistory: {...state.logHistory, dateKey: log},
+          );
+        } else if (user != null) {
+          // Try Firebase
+          try {
+            final firestoreData = await FirebaseService.getFoodLog(
+              user.uid,
+              dateKey,
+            );
+            if (firestoreData != null) {
+              log = _logFromFirestore(dateKey, firestoreData);
+              state = state.copyWith(
+                logHistory: {...state.logHistory, dateKey: log},
+              );
+              await StorageService.saveFoodLog(dateKey, log.toJson());
+            }
+          } catch (e) {
+            debugPrint(
+              '[FoodLogProvider] Failed to load $dateKey from Firestore: $e',
+            );
+          }
+        }
+      }
+
+      // Only add logs that have actual data
+      if (log != null && log.meals.isNotEmpty) {
+        logs.add(log);
+      }
+
       current = current.add(const Duration(days: 1));
     }
 
@@ -414,6 +547,22 @@ final todayCaloriesProvider = Provider<double>((ref) {
 final todayMacrosProvider = Provider<Map<String, double>>((ref) {
   final state = ref.watch(foodLogProvider);
   final log = state.todayLog;
+
+  return {
+    'calories': log?.totalCalories ?? 0,
+    'protein': log?.totalProtein ?? 0,
+    'carbs': log?.totalCarbs ?? 0,
+    'fat': log?.totalFat ?? 0,
+    'fiber': log?.totalFiber ?? 0,
+    'sodium': log?.totalSodium ?? 0,
+    'sugar': log?.totalSugar ?? 0,
+  };
+});
+
+/// Provider for selected date macro totals
+final selectedDateMacrosProvider = Provider<Map<String, double>>((ref) {
+  final state = ref.watch(foodLogProvider);
+  final log = state.currentLog;
 
   return {
     'calories': log?.totalCalories ?? 0,

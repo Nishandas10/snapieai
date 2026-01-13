@@ -154,8 +154,8 @@ class MacroProgressBar extends StatelessWidget {
   }
 }
 
-/// Macro summary card
-class MacroSummaryCard extends StatelessWidget {
+/// Macro summary card with swipable pages
+class MacroSummaryCard extends StatefulWidget {
   final double calories;
   final double calorieTarget;
   final double protein;
@@ -164,6 +164,12 @@ class MacroSummaryCard extends StatelessWidget {
   final double carbsTarget;
   final double fat;
   final double fatTarget;
+  final double fiber;
+  final double fiberTarget;
+  final double sodium;
+  final double sodiumTarget;
+  final double sugar;
+  final double sugarTarget;
 
   const MacroSummaryCard({
     super.key,
@@ -175,7 +181,27 @@ class MacroSummaryCard extends StatelessWidget {
     required this.carbsTarget,
     required this.fat,
     required this.fatTarget,
+    this.fiber = 0,
+    this.fiberTarget = 30,
+    this.sodium = 0,
+    this.sodiumTarget = 2300,
+    this.sugar = 0,
+    this.sugarTarget = 50,
   });
+
+  @override
+  State<MacroSummaryCard> createState() => _MacroSummaryCardState();
+}
+
+class _MacroSummaryCardState extends State<MacroSummaryCard> {
+  int _currentPage = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -184,12 +210,13 @@ class MacroSummaryCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            // Calorie progress - always visible
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 NutritionProgress(
-                  current: calories,
-                  target: calorieTarget,
+                  current: widget.calories,
+                  target: widget.calorieTarget,
                   label: 'Calories',
                   unit: 'kcal',
                   color: AppColors.calories,
@@ -199,38 +226,114 @@ class MacroSummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
+            // Swipable macro pages
+            SizedBox(
+              height: 90,
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() => _currentPage = index);
+                },
+                children: [
+                  // Page 1: Protein, Carbs, Fat
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Protein',
+                          current: widget.protein,
+                          target: widget.proteinTarget,
+                          color: AppColors.protein,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Carbs',
+                          current: widget.carbs,
+                          target: widget.carbsTarget,
+                          color: AppColors.carbs,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Fat',
+                          current: widget.fat,
+                          target: widget.fatTarget,
+                          color: AppColors.fat,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Page 2: Fiber, Sodium, Sugar
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Fiber',
+                          current: widget.fiber,
+                          target: widget.fiberTarget,
+                          color: AppColors.fiber,
+                          unit: 'g',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Sodium',
+                          current: widget.sodium,
+                          target: widget.sodiumTarget,
+                          color: AppColors.highSodium,
+                          unit: 'mg',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Sugar',
+                          current: widget.sugar,
+                          target: widget.sugarTarget,
+                          color: AppColors.warning,
+                          unit: 'g',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Page indicator
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Expanded(
-                  child: _MacroMini(
-                    label: 'Protein',
-                    current: protein,
-                    target: proteinTarget,
-                    color: AppColors.protein,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _MacroMini(
-                    label: 'Carbs',
-                    current: carbs,
-                    target: carbsTarget,
-                    color: AppColors.carbs,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _MacroMini(
-                    label: 'Fat',
-                    current: fat,
-                    target: fatTarget,
-                    color: AppColors.fat,
-                  ),
-                ),
+                _PageDot(isActive: _currentPage == 0),
+                const SizedBox(width: 8),
+                _PageDot(isActive: _currentPage == 1),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PageDot extends StatelessWidget {
+  final bool isActive;
+
+  const _PageDot({required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: isActive ? 20 : 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: isActive ? AppColors.primary : AppColors.border,
+        borderRadius: BorderRadius.circular(4),
       ),
     );
   }
@@ -241,12 +344,14 @@ class _MacroMini extends StatelessWidget {
   final double current;
   final double target;
   final Color color;
+  final String unit;
 
   const _MacroMini({
     required this.label,
     required this.current,
     required this.target,
     required this.color,
+    this.unit = 'g',
   });
 
   @override
@@ -280,7 +385,7 @@ class _MacroMini extends StatelessWidget {
           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         Text(
-          '${target.toInt()}g',
+          '${target.toInt()}$unit',
           style: const TextStyle(fontSize: 10, color: AppColors.textHint),
         ),
       ],

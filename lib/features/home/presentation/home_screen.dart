@@ -23,6 +23,9 @@ class HomeScreen extends ConsumerWidget {
     final proteinTarget = profile?.macroTargets.proteinGrams ?? 150;
     final carbsTarget = profile?.macroTargets.carbsGrams ?? 200;
     final fatTarget = profile?.macroTargets.fatGrams ?? 65;
+    final fiberTarget = profile?.macroTargets.fiberGrams ?? 30;
+    final sodiumTarget = profile?.macroTargets.sodiumMg ?? 2300;
+    final sugarTarget = profile?.macroTargets.sugarGrams ?? 50;
 
     return Scaffold(
       body: SafeArea(
@@ -114,6 +117,12 @@ class HomeScreen extends ConsumerWidget {
                   carbsTarget: carbsTarget,
                   fat: macros['fat'] ?? 0,
                   fatTarget: fatTarget,
+                  fiber: macros['fiber'] ?? 0,
+                  fiberTarget: fiberTarget,
+                  sodium: macros['sodium'] ?? 0,
+                  sodiumTarget: sodiumTarget,
+                  sugar: macros['sugar'] ?? 0,
+                  sugarTarget: sugarTarget,
                 ),
               ),
             ),

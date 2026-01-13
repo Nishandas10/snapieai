@@ -18,10 +18,57 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
 
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   AnalyticsPeriod _selectedPeriod = AnalyticsPeriod.week;
+  List<DailyLog> _historicalLogs = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistoricalData();
+  }
+
+  Future<void> _loadHistoricalData() async {
+    setState(() => _isLoading = true);
+
+    final now = DateTime.now();
+    DateTime startDate;
+
+    switch (_selectedPeriod) {
+      case AnalyticsPeriod.week:
+        startDate = now.subtract(const Duration(days: 7));
+        break;
+      case AnalyticsPeriod.month:
+        startDate = now.subtract(const Duration(days: 30));
+        break;
+      case AnalyticsPeriod.year:
+        startDate = now.subtract(const Duration(days: 365));
+        break;
+    }
+
+    try {
+      final logs = await ref
+          .read(foodLogProvider.notifier)
+          .getLogsForDateRange(startDate, now);
+      if (mounted) {
+        setState(() {
+          _historicalLogs = logs;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _onPeriodChanged(AnalyticsPeriod period) {
+    setState(() => _selectedPeriod = period);
+    _loadHistoricalData();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final foodLogState = ref.watch(foodLogProvider);
     final user = ref.watch(userProfileProvider);
 
     return Scaffold(
@@ -31,21 +78,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           IconButton(icon: const Icon(Icons.calendar_month), onPressed: () {}),
         ],
       ),
-      body: _buildContent(foodLogState, user),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildContent(user),
     );
   }
 
-  Widget _buildContent(DailyLogState logState, user) {
+  Widget _buildContent(user) {
     final targetCalories = user?.dailyCalorieTarget ?? 2000;
 
-    // Convert state to list of logs
-    final logs = <DailyLog>[];
-    if (logState.todayLog != null) {
-      logs.add(logState.todayLog!);
-    }
-    logs.addAll(logState.logHistory.values);
-
-    final stats = _calculateStats(logs);
+    final stats = _calculateStats(_historicalLogs);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -55,7 +97,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           // Period selector
           _PeriodSelector(
             selected: _selectedPeriod,
-            onChanged: (period) => setState(() => _selectedPeriod = period),
+            onChanged: _onPeriodChanged,
           ),
           const SizedBox(height: 24),
 
@@ -73,7 +115,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           ),
           const SizedBox(height: 16),
           _CalorieChart(
-            logs: logs,
+            logs: _historicalLogs,
             period: _selectedPeriod,
             targetCalories: targetCalories.toDouble(),
           ),
@@ -153,7 +195,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          _TopFoodsList(logs: logs),
+          _TopFoodsList(logs: _historicalLogs),
           const SizedBox(height: 32),
         ],
       ),
