@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import 'core/theme/app_theme.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/chat_storage_service.dart';
+import 'core/services/subscription_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -40,6 +42,9 @@ void main() async {
       // Initialize notification service
       await NotificationService.init();
 
+      // Initialize subscription service (Adapty)
+      await SubscriptionService.init();
+
       // Set preferred orientations
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
@@ -62,11 +67,39 @@ void main() async {
   );
 }
 
-class SnapieAI extends ConsumerWidget {
+class SnapieAI extends ConsumerStatefulWidget {
   const SnapieAI({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SnapieAI> createState() => _SnapieAIState();
+}
+
+class _SnapieAIState extends ConsumerState<SnapieAI>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // Refresh subscription status when app comes back to foreground
+      debugPrint('[SnapieAI] App resumed - refreshing subscription status');
+      ref.read(subscriptionProvider.notifier).refresh();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(

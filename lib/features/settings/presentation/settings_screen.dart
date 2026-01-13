@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/subscription_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/user_provider.dart';
 
@@ -24,11 +26,159 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+    // Refresh subscription status when settings page is opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(subscriptionProvider.notifier).refresh();
+    });
   }
 
   void _loadSettings() {
     _mealRemindersEnabled = NotificationService.isMealRemindersEnabled();
     setState(() {});
+  }
+
+  Widget _buildSubscriptionSection() {
+    final subscription = ref.watch(subscriptionProvider);
+    debugPrint(
+      '[Settings] Subscription: isPremium=${subscription.isPremium}, expiresAt=${subscription.premiumExpiresAt}',
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: subscription.isPremium
+            ? const LinearGradient(
+                colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: subscription.isPremium ? null : AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: subscription.isPremium
+                ? Colors.orange.withOpacity(0.3)
+                : Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                subscription.isPremium ? Icons.star : Icons.star_border,
+                color: subscription.isPremium
+                    ? Colors.white
+                    : AppColors.textSecondary,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subscription.isPremium ? 'Premium Member' : 'Free Plan',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: subscription.isPremium
+                            ? Colors.white
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    if (!subscription.isPremium)
+                      Text(
+                        '${subscription.remainingAIScans}/${FreeTierLimits.maxAIScans} AI scans • ${subscription.remainingChatMessages}/${FreeTierLimits.maxChatMessages} chats',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    if (subscription.isPremium &&
+                        subscription.premiumExpiresAt != null)
+                      Text(
+                        'Renews ${_formatDate(subscription.premiumExpiresAt!)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (!subscription.isPremium) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => context.push(AppRoutes.paywall),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.star, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Upgrade to Premium',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (subscription.isPremium) ...[
+            const SizedBox(height: 12),
+            Text(
+              '✓ Unlimited AI food scans\n✓ Unlimited chat messages\n✓ Smart meal planning',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.white.withOpacity(0.9),
+                height: 1.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    // Ensure we're showing the date in local time
+    final localDate = date.toLocal();
+    debugPrint(
+      '[Settings] Original date: $date, isUtc: ${date.isUtc}, toLocal: $localDate',
+    );
+    final months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${months[localDate.month - 1]} ${localDate.day}, ${localDate.year}';
   }
 
   @override
@@ -44,6 +194,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          // Subscription Section
+          _buildSubscriptionSection(),
+          const SizedBox(height: 20),
+
           // Account Section
           _SettingsSection(
             title: 'Account',
@@ -215,6 +369,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       // Sign out from Firebase
       await FirebaseService.signOut();
+
+      // Logout from subscription service (Adapty)
+      ref.read(subscriptionProvider.notifier).logout();
 
       // Clear local user profile but keep onboarding status
       await ref.read(userProfileProvider.notifier).clearProfile();

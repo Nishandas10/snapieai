@@ -80,6 +80,9 @@ dependencies:
   firebase_crashlytics: ^5.0.6
   cloud_functions: ^6.0.5
   flutter_timezone: ^5.0.1
+  
+  # In-App Purchases & Subscriptions
+  adapty_flutter: ^3.4.0
 
 dev_dependencies:
   flutter_test:

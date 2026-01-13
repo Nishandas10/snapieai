@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/models/food_item.dart';
 import '../../../core/models/daily_log.dart';
 import '../../../core/services/ai_service.dart';
+import '../../../core/services/subscription_service.dart';
 
 class AddFoodScreen extends ConsumerStatefulWidget {
   const AddFoodScreen({super.key});
@@ -43,6 +45,18 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
     super.dispose();
   }
 
+  Future<void> _showPaywall() async {
+    final result = await context.push<bool>(
+      AppRoutes.paywall,
+      extra: {'featureType': 'ai_text'},
+    );
+
+    if (result == true) {
+      // User purchased, refresh subscription state
+      await ref.read(subscriptionProvider.notifier).refresh();
+    }
+  }
+
   Future<void> _analyzeWithAI() async {
     if (_descriptionController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -51,9 +65,19 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
       return;
     }
 
+    // Check subscription before AI analysis
+    final subscription = ref.read(subscriptionProvider);
+    if (!subscription.canUseAIScan) {
+      await _showPaywall();
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
+      // Record usage before analysis
+      await ref.read(subscriptionProvider.notifier).recordAIScanUsage();
+
       final aiService = ref.read(aiServiceProvider);
       final foods = await aiService.analyzeFoodText(
         _descriptionController.text,

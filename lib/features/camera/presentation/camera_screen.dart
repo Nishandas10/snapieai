@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/subscription_service.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -62,10 +63,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   Future<void> _capturePhoto() async {
     if (_controller == null || _isCapturing) return;
 
+    // Check subscription before capturing
+    final subscription = ref.read(subscriptionProvider);
+    if (!subscription.canUseAIScan) {
+      await _showPaywall();
+      return;
+    }
+
     setState(() => _isCapturing = true);
 
     try {
       final image = await _controller!.takePicture();
+      // Record usage before analysis
+      await ref.read(subscriptionProvider.notifier).recordAIScanUsage();
       await _analyzeImage(image.path);
     } catch (e) {
       if (mounted) {
@@ -81,11 +91,32 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Future<void> _pickFromGallery() async {
+    // Check subscription before picking
+    final subscription = ref.read(subscriptionProvider);
+    if (!subscription.canUseAIScan) {
+      await _showPaywall();
+      return;
+    }
+
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
+      // Record usage before analysis
+      await ref.read(subscriptionProvider.notifier).recordAIScanUsage();
       await _analyzeImage(image.path);
+    }
+  }
+
+  Future<void> _showPaywall() async {
+    final result = await context.push<bool>(
+      AppRoutes.paywall,
+      extra: {'featureType': 'camera'},
+    );
+
+    if (result == true) {
+      // User purchased, refresh subscription state
+      await ref.read(subscriptionProvider.notifier).refresh();
     }
   }
 

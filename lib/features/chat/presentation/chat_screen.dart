@@ -3,9 +3,11 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/services/chat_storage_service.dart';
+import '../../../core/services/subscription_service.dart';
 import '../../../core/models/chat_session.dart';
 import '../../../core/providers/providers.dart';
 
@@ -67,9 +69,28 @@ How can I help you today?''',
     super.dispose();
   }
 
+  Future<void> _showPaywall() async {
+    final result = await context.push<bool>(
+      AppRoutes.paywall,
+      extra: {'featureType': 'chat'},
+    );
+
+    if (result == true) {
+      // User purchased, refresh subscription state
+      await ref.read(subscriptionProvider.notifier).refresh();
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isLoading) return;
+
+    // Check subscription before sending message
+    final subscription = ref.read(subscriptionProvider);
+    if (!subscription.canUseChat) {
+      await _showPaywall();
+      return;
+    }
 
     _messageController.clear();
 
@@ -91,6 +112,9 @@ How can I help you today?''',
     _scrollToBottom();
 
     try {
+      // Record usage before making AI call
+      await ref.read(subscriptionProvider.notifier).recordChatUsage();
+
       final aiService = ref.read(aiServiceProvider);
       final user = ref.read(userProfileProvider);
 

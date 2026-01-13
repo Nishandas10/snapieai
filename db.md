@@ -93,6 +93,15 @@ Fast access to **profile + goals + personalization** (read on every app launch)
     "notifications": true
   },
 
+  "subscription": {
+    "status": "free", // "free" | "premium"
+    "aiScansUsed": 0, // Free tier: max 2 AI scans
+    "chatMessagesUsed": 0, // Free tier: max 3 chat messages
+    "premiumExpiresAt": null,
+    "createdAt": "timestamp",
+    "updatedAt": "timestamp"
+  },
+
   "createdAt": "timestamp",
   "updatedAt": "timestamp"
 }

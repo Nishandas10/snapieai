@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/firebase_service.dart';
+import '../../../core/services/subscription_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/user_provider.dart';
 
@@ -356,6 +357,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         // Check if user has completed onboarding by checking Firestore data
         final userId = FirebaseService.currentUser?.uid;
         if (userId != null) {
+          // Initialize subscription for user
+          await SubscriptionService.identifyUser(userId);
+          await ref
+              .read(subscriptionProvider.notifier)
+              .loadSubscription(userId);
+
           final userData = await FirebaseService.getUserData(userId);
 
           if (userData != null && userData['profile'] != null) {
@@ -380,6 +387,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         // Update display name
         if (_nameController.text.isNotEmpty) {
           await FirebaseService.updateDisplayName(_nameController.text.trim());
+        }
+
+        // New user - initialize subscription data
+        final userId = FirebaseService.currentUser?.uid;
+        if (userId != null) {
+          await SubscriptionService.identifyUser(userId);
+          await SubscriptionService.initUserSubscription(userId);
+          await ref
+              .read(subscriptionProvider.notifier)
+              .loadSubscription(userId);
         }
 
         // New user, go to profile setup
@@ -411,6 +428,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         // Check if user has completed onboarding by checking Firestore data
         final userId = FirebaseService.currentUser?.uid;
         if (userId != null) {
+          // Initialize subscription for user
+          await SubscriptionService.identifyUser(userId);
+          await ref
+              .read(subscriptionProvider.notifier)
+              .loadSubscription(userId);
+
           final userData = await FirebaseService.getUserData(userId);
 
           if (userData != null && userData['profile'] != null) {
@@ -420,7 +443,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               context.go(AppRoutes.home);
             }
           } else {
-            // New user or user without profile, go to onboarding
+            // New user or user without profile, initialize subscription data and go to onboarding
+            await SubscriptionService.initUserSubscription(userId);
             if (mounted) {
               context.go(AppRoutes.profileSetup);
             }

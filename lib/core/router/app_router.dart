@@ -34,6 +34,7 @@ import '../../features/settings/presentation/meal_reminder_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/settings/presentation/health_settings_screen.dart';
 import '../../features/history/presentation/history_screen.dart';
+import '../../features/subscription/presentation/paywall_screen.dart';
 
 /// Application routes
 class AppRoutes {
@@ -67,6 +68,7 @@ class AppRoutes {
   static const String profile = '/profile';
   static const String healthSettings = '/health-settings';
   static const String history = '/history';
+  static const String paywall = '/paywall';
 }
 
 /// Provider for GoRouter
@@ -249,6 +251,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.history,
         name: 'history',
         builder: (context, state) => const HistoryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.paywall,
+        name: 'paywall',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return PaywallScreen(featureType: extra?['featureType'] as String?);
+        },
       ),
     ],
     redirect: (context, state) {
