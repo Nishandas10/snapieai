@@ -12,7 +12,9 @@ import '../../../core/models/daily_log.dart';
 import '../../../core/models/food_item.dart';
 
 class FoodLogScreen extends ConsumerStatefulWidget {
-  const FoodLogScreen({super.key});
+  final int initialTabIndex;
+
+  const FoodLogScreen({super.key, this.initialTabIndex = 0});
 
   @override
   ConsumerState<FoodLogScreen> createState() => _FoodLogScreenState();
@@ -26,7 +28,11 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 3),
+    );
   }
 
   @override

@@ -156,8 +156,8 @@ class HomeScreen extends ConsumerWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _QuickActionCard(
-                            icon: Icons.chat,
-                            label: 'AI Chat',
+                            icon: Icons.auto_awesome,
+                            label: 'Ask Sara',
                             color: AppColors.accent,
                             onTap: () => context.push(AppRoutes.chat),
                           ),
@@ -211,7 +211,7 @@ class HomeScreen extends ConsumerWidget {
                   child: _MealCard(
                     mealType: mealType,
                     meal: meal,
-                    onTap: () => context.go(AppRoutes.foodLog),
+                    onTap: () => context.go(AppRoutes.foodLog, extra: index),
                     onAdd: () => context.push(AppRoutes.addFood),
                   ),
                 );

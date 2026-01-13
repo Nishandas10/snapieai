@@ -126,7 +126,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.foodLog,
             name: 'foodLog',
-            builder: (context, state) => const FoodLogScreen(),
+            builder: (context, state) {
+              final tabIndex = state.extra as int? ?? 0;
+              return FoodLogScreen(initialTabIndex: tabIndex);
+            },
           ),
           GoRoute(
             path: AppRoutes.analytics,

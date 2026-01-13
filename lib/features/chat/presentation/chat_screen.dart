@@ -42,13 +42,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _addInitialMessage() {
     final initialMessage = ChatMessageModel(
       id: 'initial',
-      content: '''👋 Hi! I'm your AI nutrition assistant. I can help you with:
+      content:
+          '''👋 Hi! I'm Sara, your personal nutrition assistant. I can help you with:
 
 • 🍎 Food and nutrition questions
 • 📊 Analyzing your eating patterns
 • 🍽️ Meal suggestions based on your goals
-• 🏥 Advice considering your health conditions
+• 🏥 Personalized advice for your health conditions
 • 💡 Tips for healthier eating
+
+Your chat history is stored locally on your device - only you have access to it.
 
 How can I help you today?''',
       isUser: false,
@@ -235,7 +238,14 @@ How can I help you today?''',
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI Assistant'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.auto_awesome, size: 20, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('Sara'),
+          ],
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),

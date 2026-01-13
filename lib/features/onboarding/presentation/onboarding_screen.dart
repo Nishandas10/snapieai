@@ -20,30 +20,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     OnboardingPage(
       title: 'Snap Your Food',
       description:
-          'Take a photo of your meal and let AI analyze the nutritional content instantly.',
+          'Take a photo of your meal and let AI analyze the nutritional content instantly. Get detailed macro and micronutrient breakdown.',
       icon: Icons.camera_alt_rounded,
       color: AppColors.primary,
     ),
     OnboardingPage(
-      title: 'Track Your Progress',
+      title: 'Meet Sara - Your AI Assistant',
       description:
-          'Monitor your daily calories, macros, and health metrics with detailed analytics.',
-      icon: Icons.analytics_rounded,
+          'Get personalized nutrition advice based on your goals, health conditions, and dietary preferences. Sara understands your unique needs.',
+      icon: Icons.auto_awesome,
       color: AppColors.secondary,
     ),
     OnboardingPage(
-      title: 'Personalized Nutrition',
+      title: 'Health-Aware Tracking',
       description:
-          'Get AI-powered meal plans and recommendations tailored to your health goals.',
-      icon: Icons.restaurant_menu_rounded,
+          'Track glycemic index, sodium, and sugar levels. Perfect for managing diabetes, blood pressure, PCOS, and other health conditions.',
+      icon: Icons.favorite_rounded,
+      color: AppColors.error,
+    ),
+    OnboardingPage(
+      title: 'Complete Nutrition Insights',
+      description:
+          'View detailed micronutrients including iron, calcium, vitamins, and health scores for every food you log.',
+      icon: Icons.analytics_rounded,
       color: AppColors.accent,
     ),
     OnboardingPage(
-      title: 'Health-Aware',
+      title: 'Privacy First',
       description:
-          'Special guidance for BP, diabetes, PCOS, and other health conditions.',
-      icon: Icons.favorite_rounded,
-      color: AppColors.error,
+          'Your chat sessions are stored securely in local storage on your device. No one has access to your conversations except you.',
+      icon: Icons.lock_rounded,
+      color: AppColors.info,
     ),
   ];
 

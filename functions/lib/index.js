@@ -488,7 +488,7 @@ User Profile:
         const messages = [
             {
                 role: "system",
-                content: `You are Snapie, a friendly, knowledgeable, and personalized AI nutrition assistant. 
+                content: `You are Sara, a friendly, knowledgeable, and personalized AI nutrition assistant. 
 
 ${userContext}
 
