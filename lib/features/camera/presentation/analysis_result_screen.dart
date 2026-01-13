@@ -91,7 +91,14 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
           backgroundColor: AppColors.success,
         ),
       );
-      context.go(AppRoutes.home);
+
+      // Navigate to food detail page for the first logged food
+      final food = _detectedFoods.first;
+      context.pop();
+      context.push(
+        '${AppRoutes.foodDetail}/${food.id}',
+        extra: {'food': food, 'mealType': _selectedMealType},
+      );
     }
   }
 
@@ -347,12 +354,13 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  TextButton(
+                  TextButton.icon(
                     onPressed: () {
                       context.pop();
-                      context.push(AppRoutes.addFood);
+                      context.push(AppRoutes.camera);
                     },
-                    child: const Text('+ Add More'),
+                    icon: const Icon(Icons.camera_alt, size: 18),
+                    label: const Text('Take Again'),
                   ),
                 ],
               ),

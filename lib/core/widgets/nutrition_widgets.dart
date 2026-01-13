@@ -228,9 +228,10 @@ class _MacroSummaryCardState extends State<MacroSummaryCard> {
             const SizedBox(height: 24),
             // Swipable macro pages
             SizedBox(
-              height: 90,
+              height: 120,
               child: PageView(
                 controller: _pageController,
+                clipBehavior: Clip.none,
                 onPageChanged: (index) {
                   setState(() => _currentPage = index);
                 },

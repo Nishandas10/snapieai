@@ -94,7 +94,14 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
               content: Text('Added ${foods.length} item(s) successfully!'),
             ),
           );
+
+          // Navigate to food detail page for the first logged food
+          final food = foods.first;
           context.pop();
+          context.push(
+            '${AppRoutes.foodDetail}/${food.id}',
+            extra: {'food': food, 'mealType': _selectedMealType},
+          );
         }
       }
     } catch (e) {

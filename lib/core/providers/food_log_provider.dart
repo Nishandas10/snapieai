@@ -357,6 +357,10 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
           totals: totals,
         );
         debugPrint('[FoodLogProvider] Successfully synced to Firestore');
+
+        // Update streak after saving food log
+        await FirebaseService.updateStreak(user.uid);
+        debugPrint('[FoodLogProvider] Streak updated');
       } catch (e) {
         debugPrint('[FoodLogProvider] Firestore sync failed: $e');
       }

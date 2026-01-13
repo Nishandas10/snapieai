@@ -271,6 +271,55 @@ class FirebaseService {
     return logs;
   }
 
+  /// Update user streak when food is logged
+  static Future<void> updateStreak(String userId) async {
+    try {
+      final now = DateTime.now();
+      final today =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // Get recent food logs to calculate streak
+      int streak = 0;
+      DateTime checkDate = now;
+
+      for (int i = 0; i < 365; i++) {
+        final dateKey =
+            '${checkDate.year}-${checkDate.month.toString().padLeft(2, '0')}-${checkDate.day.toString().padLeft(2, '0')}';
+        final log = await getFoodLog(userId, dateKey);
+
+        if (log != null && log['meals'] != null) {
+          // Check if there's any food logged for this date
+          final meals = log['meals'] as Map<String, dynamic>;
+          bool hasFood = false;
+          for (final mealList in meals.values) {
+            if (mealList is List && mealList.isNotEmpty) {
+              hasFood = true;
+              break;
+            }
+          }
+
+          if (hasFood) {
+            streak++;
+            checkDate = checkDate.subtract(const Duration(days: 1));
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+
+      // Update streak in user stats
+      await _userDoc(userId).update({
+        'stats.streakDays': streak,
+        'stats.lastLogDate': today,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Ignore errors, streak update is not critical
+    }
+  }
+
   // ============ FIRESTORE - BODY LOGS ============
 
   /// Add body metrics log
