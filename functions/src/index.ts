@@ -472,10 +472,33 @@ export const chat = onCall(async (request) => {
     message,
     conversationHistory = [],
     sessionId,
+    userProfile,
   } = request.data as {
     message?: string;
     conversationHistory?: Array<{ role: string; content: string }>;
     sessionId?: string;
+    userProfile?: {
+      name?: string;
+      age?: number;
+      gender?: string;
+      heightCm?: number;
+      weightKg?: number;
+      activityLevel?: string;
+      country?: string;
+      goal?: string;
+      healthConditions?: string[];
+      dietaryPreferences?: string[];
+      dailyCalorieTarget?: number;
+      macroTargets?: {
+        proteinGrams?: number;
+        carbsGrams?: number;
+        fatGrams?: number;
+        fiberGrams?: number;
+      };
+      bmi?: number;
+      giLimit?: number;
+      sodiumLimitMg?: number;
+    };
   };
 
   if (!message) {
@@ -483,34 +506,108 @@ export const chat = onCall(async (request) => {
   }
 
   try {
-    // Get user profile for context
-    const userDoc = await db.collection("users").doc(request.auth.uid).get();
+    // Build comprehensive user context from the passed profile
+    let userContext = "";
 
-    const userData = userDoc.data();
-    const userContext = userData
-      ? `
+    if (userProfile) {
+      const profile = userProfile;
+      const conditions = profile.healthConditions?.join(", ") || "None";
+      const dietPrefs = profile.dietaryPreferences?.join(", ") || "None";
+      const macros = profile.macroTargets;
+
+      userContext = `
+USER PROFILE - Use this to personalize your responses:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 Basic Info:
+   • Name: ${profile.name || "Not provided"}
+   • Age: ${profile.age || "Not provided"}
+   • Gender: ${profile.gender || "Not provided"}
+   • Country: ${profile.country || "Not provided"}
+
+📊 Body Metrics:
+   • Height: ${profile.heightCm ? `${profile.heightCm} cm` : "Not provided"}
+   • Weight: ${profile.weightKg ? `${profile.weightKg} kg` : "Not provided"}
+   • BMI: ${profile.bmi ? profile.bmi.toFixed(1) : "Not calculated"}
+   • Activity Level: ${profile.activityLevel || "Not specified"}
+
+🎯 Goals:
+   • Primary Goal: ${profile.goal || "Not specified"}
+   • Daily Calorie Target: ${profile.dailyCalorieTarget || "Not set"} kcal
+
+🥗 Daily Macro Targets:
+   • Protein: ${macros?.proteinGrams || "Not set"}g
+   • Carbs: ${macros?.carbsGrams || "Not set"}g
+   • Fat: ${macros?.fatGrams || "Not set"}g
+   • Fiber: ${macros?.fiberGrams || 30}g
+
+⚠️ Health Conditions: ${conditions}
+   ${
+     profile.healthConditions?.includes("high_blood_pressure")
+       ? "→ Sodium limit: " + (profile.sodiumLimitMg || 2300) + "mg/day"
+       : ""
+   }
+   ${
+     profile.healthConditions?.includes("diabetes") ||
+     profile.healthConditions?.includes("prediabetic")
+       ? "→ GI limit: " + (profile.giLimit || 55)
+       : ""
+   }
+
+🍽️ Dietary Preferences: ${dietPrefs}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IMPORTANT: Always tailor your advice based on the user's:
+- Health conditions (especially for sodium, sugar, cholesterol recommendations)
+- Dietary preferences and restrictions
+- Calorie and macro targets
+- Country (for culturally relevant food suggestions)
+`;
+    } else {
+      // Fallback: Get user profile from Firestore
+      const userDoc = await db.collection("users").doc(request.auth.uid).get();
+      const userData = userDoc.data();
+      if (userData) {
+        userContext = `
 User Profile:
+- Name: ${userData.name || "User"}
 - Goal: ${userData.goal || "Not specified"}
 - Daily calorie target: ${userData.dailyCalorieTarget || "Not set"}
-- Dietary restrictions: ${userData.dietaryRestrictions?.join(", ") || "None"}
+- Health conditions: ${userData.healthConditions?.join(", ") || "None"}
+- Dietary preferences: ${userData.dietaryPreferences?.join(", ") || "None"}
 - Activity level: ${userData.activityLevel || "Not specified"}
-`
-      : "";
+`;
+      }
+    }
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
         role: "system",
-        content: `You are Snapie, a friendly and knowledgeable AI nutrition assistant. You help users with:
-- Nutrition advice and education
-- Diet planning and meal suggestions
-- Understanding food labels and ingredients
-- Healthy eating habits
-- Answering food-related questions
+        content: `You are Snapie, a friendly, knowledgeable, and personalized AI nutrition assistant. 
 
 ${userContext}
 
-Be conversational, supportive, and provide actionable advice. Keep responses concise but helpful.
-If asked about specific medical conditions, recommend consulting a healthcare professional.`,
+YOUR ROLE:
+- Provide personalized nutrition advice based on the user's profile
+- Consider their health conditions when making recommendations
+- Suggest foods and meals that align with their dietary preferences
+- Help them achieve their calorie and macro goals
+- Be culturally aware and suggest foods relevant to their country
+
+RESPONSE GUIDELINES:
+- Be conversational, warm, and supportive
+- Use clear formatting with bullet points and sections
+- Keep responses concise but comprehensive
+- Always consider the user's health conditions in recommendations
+- For users with high blood pressure: focus on low-sodium options
+- For users with diabetes/prediabetes: emphasize low GI foods
+- Recommend consulting healthcare professionals for medical advice
+
+FORMAT YOUR RESPONSES:
+- Use bullet points (•) for lists
+- Use numbered lists (1., 2., 3.) for steps
+- Use bold (**text**) for emphasis
+- Use headers for sections
+- Keep paragraphs short and scannable`,
       },
       ...conversationHistory.map((msg) => ({
         role: msg.role as "user" | "assistant",
@@ -525,7 +622,7 @@ If asked about specific medical conditions, recommend consulting a healthcare pr
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages,
-      max_tokens: 500,
+      max_tokens: 800,
       temperature: 0.7,
     });
 

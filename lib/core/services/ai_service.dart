@@ -176,6 +176,34 @@ class AIService {
   }) async {
     try {
       final callable = _functions.httpsCallable('chat');
+
+      // Build user profile data to send to the cloud function
+      Map<String, dynamic>? profileData;
+      if (userProfile != null) {
+        profileData = {
+          'name': userProfile.name,
+          'age': userProfile.age,
+          'gender': userProfile.gender,
+          'heightCm': userProfile.heightCm,
+          'weightKg': userProfile.weightKg,
+          'activityLevel': userProfile.activityLevel,
+          'country': userProfile.country,
+          'goal': userProfile.goal,
+          'healthConditions': userProfile.healthConditions,
+          'dietaryPreferences': userProfile.dietaryPreferences,
+          'dailyCalorieTarget': userProfile.dailyCalorieTarget,
+          'macroTargets': {
+            'proteinGrams': userProfile.macroTargets.proteinGrams,
+            'carbsGrams': userProfile.macroTargets.carbsGrams,
+            'fatGrams': userProfile.macroTargets.fatGrams,
+            'fiberGrams': userProfile.macroTargets.fiberGrams,
+          },
+          'bmi': userProfile.bmi,
+          'giLimit': 55, // Default GI limit for diabetics
+          'sodiumLimitMg': 2300, // Default sodium limit
+        };
+      }
+
       final result = await callable.call({
         'message': message,
         'conversationHistory':
@@ -183,6 +211,7 @@ class AIService {
                 ?.map((msg) => {'role': msg['role'], 'content': msg['content']})
                 .toList() ??
             [],
+        'userProfile': profileData,
       });
 
       final data = Map<String, dynamic>.from(result.data as Map);
