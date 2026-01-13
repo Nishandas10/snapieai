@@ -9,6 +9,7 @@ import '../../../core/providers/providers.dart';
 import '../../../core/widgets/food_widgets.dart';
 import '../../../core/widgets/nutrition_widgets.dart';
 import '../../../core/models/daily_log.dart';
+import '../../../core/models/food_item.dart';
 
 class FoodLogScreen extends ConsumerStatefulWidget {
   const FoodLogScreen({super.key});
@@ -123,16 +124,12 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
                   meal: todayLog?.getMeal(type),
                   onAddFood: () => _addFood(type),
                   onDeleteFood: (foodId) => _deleteFood(type, foodId),
+                  onTapFood: (food) => _viewFoodDetails(type, food),
                 );
               }).toList(),
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(AppRoutes.camera),
-        icon: const Icon(Icons.camera_alt),
-        label: const Text('Scan Food'),
       ),
     );
   }
@@ -143,6 +140,13 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
 
   void _deleteFood(MealType mealType, String foodId) {
     ref.read(foodLogProvider.notifier).removeFoodFromMeal(mealType, foodId);
+  }
+
+  void _viewFoodDetails(MealType mealType, FoodItem food) {
+    context.push(
+      '${AppRoutes.foodDetail}/${food.id}',
+      extra: {'food': food, 'mealType': mealType},
+    );
   }
 }
 
@@ -178,7 +182,7 @@ class _DateSelector extends StatelessWidget {
             onTap: () => onDateChanged(date),
             child: Container(
               width: 48,
-              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.primary : AppColors.surface,
                 borderRadius: BorderRadius.circular(12),
@@ -191,6 +195,7 @@ class _DateSelector extends StatelessWidget {
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     DateFormat('E').format(date).substring(0, 1),
@@ -201,10 +206,11 @@ class _DateSelector extends StatelessWidget {
                           : AppColors.textSecondary,
                     ),
                   ),
+                  const SizedBox(height: 1),
                   Text(
                     date.day.toString(),
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: isSelected ? Colors.white : AppColors.textPrimary,
                     ),
@@ -260,12 +266,14 @@ class _MealTabContent extends StatelessWidget {
   final Meal? meal;
   final VoidCallback onAddFood;
   final Function(String) onDeleteFood;
+  final Function(FoodItem) onTapFood;
 
   const _MealTabContent({
     required this.mealType,
     this.meal,
     required this.onAddFood,
     required this.onDeleteFood,
+    required this.onTapFood,
   });
 
   @override
@@ -298,6 +306,7 @@ class _MealTabContent extends StatelessWidget {
         final food = meal!.foods[index];
         return FoodItemCard(
           food: food,
+          onTap: () => onTapFood(food),
           onDelete: () => onDeleteFood(food.id),
           showHealthFlags: true,
         );

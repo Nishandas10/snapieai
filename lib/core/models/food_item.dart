@@ -15,6 +15,7 @@ class FoodItem extends Equatable {
   final double? saturatedFatGrams;
   final double? sugarGrams;
   final double? potassiumMg;
+  final double? transFatGrams;
   final int? glycemicIndex;
   final int? glycemicLoad;
   final double servingSize;
@@ -26,6 +27,12 @@ class FoodItem extends Equatable {
   final Map<String, dynamic>? micronutrients;
   final bool isManuallyEdited;
   final String? aiExplanation;
+  // New micronutrient fields
+  final double? ironMg;
+  final double? calciumMg;
+  final double? vitaminAPercent;
+  final double? vitaminCPercent;
+  final double? healthScore;
 
   const FoodItem({
     required this.id,
@@ -40,6 +47,7 @@ class FoodItem extends Equatable {
     this.saturatedFatGrams,
     this.sugarGrams,
     this.potassiumMg,
+    this.transFatGrams,
     this.glycemicIndex,
     this.glycemicLoad,
     this.servingSize = 1,
@@ -51,6 +59,11 @@ class FoodItem extends Equatable {
     this.micronutrients,
     this.isManuallyEdited = false,
     this.aiExplanation,
+    this.ironMg,
+    this.calciumMg,
+    this.vitaminAPercent,
+    this.vitaminCPercent,
+    this.healthScore,
   });
 
   double get totalMacroGrams => protein + carbs + fat;
@@ -86,6 +99,7 @@ class FoodItem extends Equatable {
     double? saturatedFatGrams,
     double? sugarGrams,
     double? potassiumMg,
+    double? transFatGrams,
     int? glycemicIndex,
     int? glycemicLoad,
     double? servingSize,
@@ -97,6 +111,11 @@ class FoodItem extends Equatable {
     Map<String, dynamic>? micronutrients,
     bool? isManuallyEdited,
     String? aiExplanation,
+    double? ironMg,
+    double? calciumMg,
+    double? vitaminAPercent,
+    double? vitaminCPercent,
+    double? healthScore,
   }) {
     return FoodItem(
       id: id ?? this.id,
@@ -111,6 +130,7 @@ class FoodItem extends Equatable {
       saturatedFatGrams: saturatedFatGrams ?? this.saturatedFatGrams,
       sugarGrams: sugarGrams ?? this.sugarGrams,
       potassiumMg: potassiumMg ?? this.potassiumMg,
+      transFatGrams: transFatGrams ?? this.transFatGrams,
       glycemicIndex: glycemicIndex ?? this.glycemicIndex,
       glycemicLoad: glycemicLoad ?? this.glycemicLoad,
       servingSize: servingSize ?? this.servingSize,
@@ -122,6 +142,11 @@ class FoodItem extends Equatable {
       micronutrients: micronutrients ?? this.micronutrients,
       isManuallyEdited: isManuallyEdited ?? this.isManuallyEdited,
       aiExplanation: aiExplanation ?? this.aiExplanation,
+      ironMg: ironMg ?? this.ironMg,
+      calciumMg: calciumMg ?? this.calciumMg,
+      vitaminAPercent: vitaminAPercent ?? this.vitaminAPercent,
+      vitaminCPercent: vitaminCPercent ?? this.vitaminCPercent,
+      healthScore: healthScore ?? this.healthScore,
     );
   }
 
@@ -139,6 +164,7 @@ class FoodItem extends Equatable {
       'saturatedFatGrams': saturatedFatGrams,
       'sugarGrams': sugarGrams,
       'potassiumMg': potassiumMg,
+      'transFatGrams': transFatGrams,
       'glycemicIndex': glycemicIndex,
       'glycemicLoad': glycemicLoad,
       'servingSize': servingSize,
@@ -150,6 +176,11 @@ class FoodItem extends Equatable {
       'micronutrients': micronutrients,
       'isManuallyEdited': isManuallyEdited,
       'aiExplanation': aiExplanation,
+      'ironMg': ironMg,
+      'calciumMg': calciumMg,
+      'vitaminAPercent': vitaminAPercent,
+      'vitaminCPercent': vitaminCPercent,
+      'healthScore': healthScore,
     };
   }
 
@@ -172,6 +203,7 @@ class FoodItem extends Equatable {
       saturatedFatGrams: (json['saturatedFatGrams'] as num?)?.toDouble(),
       sugarGrams: (json['sugarGrams'] as num?)?.toDouble(),
       potassiumMg: (json['potassiumMg'] as num?)?.toDouble(),
+      transFatGrams: (json['transFatGrams'] as num?)?.toDouble(),
       glycemicIndex:
           (json['glycemicIndex'] as num?)?.toInt() ??
           (json['glycemic_index'] as num?)?.toInt(),
@@ -191,6 +223,11 @@ class FoodItem extends Equatable {
       micronutrients: json['micronutrients'] as Map<String, dynamic>?,
       isManuallyEdited: json['isManuallyEdited'] as bool? ?? false,
       aiExplanation: json['aiExplanation'] as String?,
+      ironMg: (json['ironMg'] as num?)?.toDouble(),
+      calciumMg: (json['calciumMg'] as num?)?.toDouble(),
+      vitaminAPercent: (json['vitaminAPercent'] as num?)?.toDouble(),
+      vitaminCPercent: (json['vitaminCPercent'] as num?)?.toDouble(),
+      healthScore: (json['healthScore'] as num?)?.toDouble(),
     );
   }
 
@@ -219,6 +256,7 @@ class FoodItem extends Equatable {
     saturatedFatGrams,
     sugarGrams,
     potassiumMg,
+    transFatGrams,
     glycemicIndex,
     glycemicLoad,
     servingSize,
@@ -230,5 +268,10 @@ class FoodItem extends Equatable {
     micronutrients,
     isManuallyEdited,
     aiExplanation,
+    ironMg,
+    calciumMg,
+    vitaminAPercent,
+    vitaminCPercent,
+    healthScore,
   ];
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/food_item.dart';
+import '../models/daily_log.dart';
 import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/onboarding/presentation/profile_setup_screen.dart';
@@ -151,8 +153,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '${AppRoutes.foodDetail}/:id',
         name: 'foodDetail',
-        builder: (context, state) =>
-            FoodDetailScreen(foodId: state.pathParameters['id']!),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return FoodDetailScreen(
+            foodId: state.pathParameters['id']!,
+            food: extra?['food'] as FoodItem?,
+            mealType: extra?['mealType'] as MealType?,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.camera,

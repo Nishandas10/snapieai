@@ -71,12 +71,21 @@ class AIService {
         cholesterolMg: (analysisData['cholesterol'] ?? 0).toDouble(),
         sugarGrams: (analysisData['sugar'] ?? 0).toDouble(),
         saturatedFatGrams: (analysisData['saturatedFat'] ?? 0).toDouble(),
-        glycemicIndex: (analysisData['gi'] ?? 0).toInt(),
+        transFatGrams: (analysisData['transFat'] ?? 0).toDouble(),
+        potassiumMg: (analysisData['potassium'] ?? 0).toDouble(),
+        glycemicIndex:
+            (analysisData['glycemicIndex'] ?? analysisData['gi'] ?? 0).toInt(),
+        glycemicLoad: (analysisData['glycemicLoad'] ?? 0).toInt(),
         servingSize: (analysisData['servingSizeGrams'] ?? 100).toDouble(),
         servingUnit: 'g',
         confidence: (analysisData['confidence'] ?? 0.8).toDouble(),
         aiExplanation: analysisData['healthNotes'] ?? '',
         healthFlags: List<String>.from(analysisData['warnings'] ?? []),
+        ironMg: (analysisData['iron'] ?? 0).toDouble(),
+        calciumMg: (analysisData['calcium'] ?? 0).toDouble(),
+        vitaminAPercent: (analysisData['vitaminA'] ?? 0).toDouble(),
+        vitaminCPercent: (analysisData['vitaminC'] ?? 0).toDouble(),
+        healthScore: (analysisData['healthScore'] ?? 5.0).toDouble(),
       );
 
       return [foodItem];
@@ -128,12 +137,21 @@ class AIService {
         cholesterolMg: (analysisData['cholesterol'] ?? 0).toDouble(),
         sugarGrams: (analysisData['sugar'] ?? 0).toDouble(),
         saturatedFatGrams: (analysisData['saturatedFat'] ?? 0).toDouble(),
-        glycemicIndex: (analysisData['gi'] ?? 0).toInt(),
+        transFatGrams: (analysisData['transFat'] ?? 0).toDouble(),
+        potassiumMg: (analysisData['potassium'] ?? 0).toDouble(),
+        glycemicIndex:
+            (analysisData['glycemicIndex'] ?? analysisData['gi'] ?? 0).toInt(),
+        glycemicLoad: (analysisData['glycemicLoad'] ?? 0).toInt(),
         servingSize: (analysisData['servingSizeGrams'] ?? 100).toDouble(),
         servingUnit: 'g',
         confidence: (analysisData['confidence'] ?? 0.8).toDouble(),
         aiExplanation: analysisData['healthNotes'] ?? '',
         healthFlags: List<String>.from(analysisData['warnings'] ?? []),
+        ironMg: (analysisData['iron'] ?? 0).toDouble(),
+        calciumMg: (analysisData['calcium'] ?? 0).toDouble(),
+        vitaminAPercent: (analysisData['vitaminA'] ?? 0).toDouble(),
+        vitaminCPercent: (analysisData['vitaminC'] ?? 0).toDouble(),
+        healthScore: (analysisData['healthScore'] ?? 5.0).toDouble(),
       );
 
       return [foodItem];

@@ -103,6 +103,8 @@ Return your response as a valid JSON object with this exact structure:
   "vitaminC": 15,
   "calcium": 8,
   "iron": 12,
+  "glycemicIndex": 55,
+  "glycemicLoad": 10,
   "ingredients": ["ingredient1", "ingredient2"],
   "healthScore": 7.5,
   "healthNotes": "Brief health assessment",
@@ -111,6 +113,8 @@ Return your response as a valid JSON object with this exact structure:
 }
 
 All numeric values should be numbers (not strings). Percentages for vitamins/minerals are daily value percentages.
+glycemicIndex should be a number from 0-100 indicating how quickly the food raises blood sugar.
+glycemicLoad takes into account portion size (low: 0-10, medium: 11-19, high: 20+).
 Be as accurate as possible with nutritional estimates based on typical serving sizes.`,
                     },
                     {
@@ -152,6 +156,8 @@ Return your response as a valid JSON object with this exact structure:
   "vitaminC": 15,
   "calcium": 8,
   "iron": 12,
+  "glycemicIndex": 55,
+  "glycemicLoad": 10,
   "ingredients": ["ingredient1", "ingredient2"],
   "healthScore": 7.5,
   "healthNotes": "Brief health assessment",
@@ -160,6 +166,8 @@ Return your response as a valid JSON object with this exact structure:
 }
 
 All numeric values should be numbers (not strings). Percentages for vitamins/minerals are daily value percentages.
+glycemicIndex should be a number from 0-100 indicating how quickly the food raises blood sugar.
+glycemicLoad takes into account portion size (low: 0-10, medium: 11-19, high: 20+).
 If you cannot identify the food, still return the JSON structure with reasonable estimates and lower confidence.`,
                     },
                     {

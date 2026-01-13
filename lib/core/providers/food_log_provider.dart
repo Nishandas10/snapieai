@@ -102,10 +102,36 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
               carbs: (nutrition['carbs'] as num?)?.toDouble() ?? 0,
               fat: (nutrition['fat'] as num?)?.toDouble() ?? 0,
               fiber: (nutrition['fiber'] as num?)?.toDouble() ?? 0,
-              sodiumMg: (nutrition['sodiumMg'] as num?)?.toDouble() ?? 0,
-              sugarGrams: (nutrition['sugarG'] as num?)?.toDouble() ?? 0,
+              sodiumMg: (nutrition['sodiumMg'] as num?)?.toDouble(),
+              sugarGrams:
+                  (nutrition['sugarGrams'] as num?)?.toDouble() ??
+                  (nutrition['sugarG'] as num?)?.toDouble(),
+              cholesterolMg: (nutrition['cholesterolMg'] as num?)?.toDouble(),
+              saturatedFatGrams: (nutrition['saturatedFatGrams'] as num?)
+                  ?.toDouble(),
+              transFatGrams: (nutrition['transFatGrams'] as num?)?.toDouble(),
+              potassiumMg: (nutrition['potassiumMg'] as num?)?.toDouble(),
+              ironMg: (nutrition['ironMg'] as num?)?.toDouble(),
+              calciumMg: (nutrition['calciumMg'] as num?)?.toDouble(),
+              vitaminAPercent: (nutrition['vitaminAPercent'] as num?)
+                  ?.toDouble(),
+              vitaminCPercent: (nutrition['vitaminCPercent'] as num?)
+                  ?.toDouble(),
+              glycemicIndex: (nutrition['glycemicIndex'] as num?)?.toInt(),
+              glycemicLoad: (nutrition['glycemicLoad'] as num?)?.toInt(),
+              healthScore: (nutrition['healthScore'] as num?)?.toDouble(),
               servingSize: (food['servingSize'] as num?)?.toDouble() ?? 1,
               servingUnit: food['servingUnit'] as String? ?? 'serving',
+              imagePath: food['imagePath'] as String?,
+              notes: food['notes'] as String?,
+              confidence: (food['confidence'] as num?)?.toDouble() ?? 1.0,
+              isManuallyEdited: food['isManuallyEdited'] as bool? ?? false,
+              aiExplanation: food['aiExplanation'] as String?,
+              healthFlags:
+                  (food['healthFlags'] as List<dynamic>?)
+                      ?.map((e) => e as String)
+                      .toList() ??
+                  [],
             );
           }).toList() ??
           [];
@@ -200,6 +226,12 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
                   'name': food.name,
                   'servingSize': food.servingSize,
                   'servingUnit': food.servingUnit,
+                  'imagePath': food.imagePath,
+                  'notes': food.notes,
+                  'confidence': food.confidence,
+                  'isManuallyEdited': food.isManuallyEdited,
+                  'aiExplanation': food.aiExplanation,
+                  'healthFlags': food.healthFlags,
                   'nutrition': {
                     'calories': food.calories,
                     'protein': food.protein,
@@ -207,7 +239,18 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
                     'fat': food.fat,
                     'fiber': food.fiber,
                     'sodiumMg': food.sodiumMg,
-                    'sugarG': food.sugarGrams,
+                    'sugarGrams': food.sugarGrams,
+                    'cholesterolMg': food.cholesterolMg,
+                    'saturatedFatGrams': food.saturatedFatGrams,
+                    'transFatGrams': food.transFatGrams,
+                    'potassiumMg': food.potassiumMg,
+                    'ironMg': food.ironMg,
+                    'calciumMg': food.calciumMg,
+                    'vitaminAPercent': food.vitaminAPercent,
+                    'vitaminCPercent': food.vitaminCPercent,
+                    'glycemicIndex': food.glycemicIndex,
+                    'glycemicLoad': food.glycemicLoad,
+                    'healthScore': food.healthScore,
                   },
                 },
               )
