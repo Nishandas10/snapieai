@@ -353,8 +353,24 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           password: _passwordController.text,
         );
 
-        // Sync local profile data to Firestore after login
-        await ref.read(userProfileProvider.notifier).syncToFirestore();
+        // Check if user has completed onboarding by checking Firestore data
+        final userId = FirebaseService.currentUser?.uid;
+        if (userId != null) {
+          final userData = await FirebaseService.getUserData(userId);
+
+          if (userData != null && userData['profile'] != null) {
+            // User has profile data, sync from Firestore and go to home
+            await ref.read(userProfileProvider.notifier).syncFromFirestore();
+            if (mounted) {
+              context.go(AppRoutes.home);
+            }
+          } else {
+            // User logged in but no profile data, go to onboarding
+            if (mounted) {
+              context.go(AppRoutes.profileSetup);
+            }
+          }
+        }
       } else {
         await FirebaseService.signUpWithEmail(
           email: _emailController.text.trim(),
@@ -366,13 +382,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           await FirebaseService.updateDisplayName(_nameController.text.trim());
         }
 
-        // Sync local profile data to Firestore for new user
-        await ref.read(userProfileProvider.notifier).syncToFirestore();
-      }
-
-      if (mounted) {
-        // Navigate to home
-        context.go(AppRoutes.home);
+        // New user, go to profile setup
+        if (mounted) {
+          context.go(AppRoutes.profileSetup);
+        }
       }
     } catch (e) {
       setState(() {
@@ -395,11 +408,24 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       final credential = await FirebaseService.signInWithGoogle();
 
       if (credential != null && mounted) {
-        // Sync local profile data to Firestore (works for both new and existing users)
-        await ref.read(userProfileProvider.notifier).syncToFirestore();
+        // Check if user has completed onboarding by checking Firestore data
+        final userId = FirebaseService.currentUser?.uid;
+        if (userId != null) {
+          final userData = await FirebaseService.getUserData(userId);
 
-        // Navigate to home
-        context.go(AppRoutes.home);
+          if (userData != null && userData['profile'] != null) {
+            // User has profile data, sync from Firestore and go to home
+            await ref.read(userProfileProvider.notifier).syncFromFirestore();
+            if (mounted) {
+              context.go(AppRoutes.home);
+            }
+          } else {
+            // New user or user without profile, go to onboarding
+            if (mounted) {
+              context.go(AppRoutes.profileSetup);
+            }
+          }
+        }
       }
     } catch (e) {
       setState(() {
@@ -409,53 +435,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  Future<void> _saveOnboardingData(String userId) async {
-    final userProfile = ref.read(userProfileProvider);
-
-    if (userProfile != null) {
-      await FirebaseService.saveUserData(
-        userId: userId,
-        profile: {
-          'age': userProfile.age,
-          'gender': userProfile.gender,
-          'heightCm': userProfile.heightCm,
-          'weightKg': userProfile.weightKg,
-        },
-        goals: {
-          'type': userProfile.goal,
-          'targetWeightKg': userProfile.weightKg, // Can be updated later
-          'weeklyGoalKg': 0.5,
-        },
-        health: {
-          'conditions': {
-            'bp': userProfile.healthConditions.contains('high_blood_pressure'),
-            'pcos': userProfile.healthConditions.contains('pcos'),
-            'diabetes': userProfile.healthConditions.contains('diabetes'),
-            'cholesterol': userProfile.healthConditions.contains(
-              'high_cholesterol',
-            ),
-          },
-        },
-        preferences: {
-          'dietType': userProfile.dietaryPreferences,
-          'cuisine': [userProfile.country.toLowerCase()],
-          'mealCountPerDay': 3,
-        },
-        plan: {
-          'dailyCalories': userProfile.dailyCalorieTarget.toInt(),
-          'macros': {
-            'protein': userProfile.macroTargets.proteinGrams.toInt(),
-            'carbs': userProfile.macroTargets.carbsGrams.toInt(),
-            'fat': userProfile.macroTargets.fatGrams.toInt(),
-            'fiber': 30,
-          },
-          'sodiumLimitMg': 2300,
-          'giLimit': 55,
-        },
-      );
     }
   }
 

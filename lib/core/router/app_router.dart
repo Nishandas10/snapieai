@@ -26,6 +26,9 @@ import '../../features/recipes/presentation/recipes_screen.dart';
 import '../../features/recipes/presentation/recipe_detail_screen.dart';
 import '../../features/recipes/presentation/recipe_generator_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/settings/presentation/edit_profile_screen.dart';
+import '../../features/settings/presentation/goals_targets_screen.dart';
+import '../../features/settings/presentation/meal_reminder_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/settings/presentation/health_settings_screen.dart';
 import '../../features/history/presentation/history_screen.dart';
@@ -56,6 +59,9 @@ class AppRoutes {
   static const String recipeDetail = '/recipe-detail';
   static const String smartRecipeGenerator = '/smart-recipe-generator';
   static const String settings = '/settings';
+  static const String editProfile = '/edit-profile';
+  static const String goalsTargets = '/goals-targets';
+  static const String mealReminders = '/meal-reminders';
   static const String profile = '/profile';
   static const String healthSettings = '/health-settings';
   static const String history = '/history';
@@ -212,6 +218,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.healthSettings,
         name: 'healthSettings',
         builder: (context, state) => const HealthSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.editProfile,
+        name: 'editProfile',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.goalsTargets,
+        name: 'goalsTargets',
+        builder: (context, state) => const GoalsTargetsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.mealReminders,
+        name: 'mealReminders',
+        builder: (context, state) => const MealReminderScreen(),
       ),
       GoRoute(
         path: AppRoutes.history,

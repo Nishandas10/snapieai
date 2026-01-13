@@ -6,6 +6,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/firebase_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/user_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -46,17 +47,52 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
-    final isOnboardingComplete = StorageService.isOnboardingComplete();
     final isAuthenticated = FirebaseService.isAuthenticated;
 
-    if (isOnboardingComplete) {
-      if (isAuthenticated) {
-        context.go(AppRoutes.home);
+    if (isAuthenticated) {
+      // User is authenticated, check if they have profile data
+      final userId = FirebaseService.currentUser?.uid;
+      if (userId != null) {
+        try {
+          final userData = await FirebaseService.getUserData(userId);
+
+          if (userData != null && userData['profile'] != null) {
+            // User has profile data, sync and go to home
+            await ref.read(userProfileProvider.notifier).syncFromFirestore();
+            if (mounted) {
+              context.go(AppRoutes.home);
+            }
+          } else {
+            // User is authenticated but no profile, go to profile setup
+            if (mounted) {
+              context.go(AppRoutes.profileSetup);
+            }
+          }
+        } catch (e) {
+          // Error fetching data, go to auth
+          if (mounted) {
+            context.go(AppRoutes.auth);
+          }
+        }
       } else {
-        context.go(AppRoutes.auth);
+        if (mounted) {
+          context.go(AppRoutes.auth);
+        }
       }
     } else {
-      context.go(AppRoutes.onboarding);
+      // User not authenticated
+      final isOnboardingComplete = StorageService.isOnboardingComplete();
+      if (isOnboardingComplete) {
+        // User completed onboarding before but logged out
+        if (mounted) {
+          context.go(AppRoutes.auth);
+        }
+      } else {
+        // Fresh start
+        if (mounted) {
+          context.go(AppRoutes.onboarding);
+        }
+      }
     }
   }
 

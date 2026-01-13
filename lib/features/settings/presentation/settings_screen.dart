@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/storage_service.dart';
-import '../../../core/services/ai_service.dart';
+import '../../../core/services/firebase_service.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/providers/user_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -14,26 +18,17 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final TextEditingController _apiKeyController = TextEditingController();
-  bool _showApiKey = false;
+  bool _mealRemindersEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    _loadApiKey();
+    _loadSettings();
   }
 
-  void _loadApiKey() {
-    final apiKey = StorageService.getApiKey();
-    if (apiKey != null) {
-      _apiKeyController.text = apiKey;
-    }
-  }
-
-  @override
-  void dispose() {
-    _apiKeyController.dispose();
-    super.dispose();
+  void _loadSettings() {
+    _mealRemindersEnabled = NotificationService.isMealRemindersEnabled();
+    setState(() {});
   }
 
   @override
@@ -49,22 +44,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // API Key Section
-          _SettingsSection(
-            title: 'AI Configuration',
-            children: [
-              _SettingsTile(
-                icon: Icons.key,
-                title: 'OpenAI API Key',
-                subtitle: _apiKeyController.text.isEmpty
-                    ? 'Not configured'
-                    : '••••••••••${_apiKeyController.text.substring(_apiKeyController.text.length - 4)}',
-                onTap: () => _showApiKeyDialog(context),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
           // Account Section
           _SettingsSection(
             title: 'Account',
@@ -72,23 +51,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _SettingsTile(
                 icon: Icons.person,
                 title: 'Edit Profile',
-                onTap: () {
-                  // TODO: Navigate to edit profile
-                },
+                subtitle: 'Update your personal information',
+                onTap: () => context.push(AppRoutes.editProfile),
               ),
               _SettingsTile(
                 icon: Icons.flag,
                 title: 'Goals & Targets',
-                onTap: () {
-                  // TODO: Navigate to goals
-                },
+                subtitle: 'Calories, macros and fitness goals',
+                onTap: () => context.push(AppRoutes.goalsTargets),
               ),
               _SettingsTile(
                 icon: Icons.health_and_safety,
                 title: 'Health Conditions',
-                onTap: () {
-                  // TODO: Navigate to health conditions
-                },
+                subtitle: 'Dietary preferences and allergies',
+                onTap: () => context.push(AppRoutes.healthSettings),
               ),
             ],
           ),
@@ -98,60 +74,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsSection(
             title: 'Notifications',
             children: [
-              _SettingsToggle(
+              _SettingsTileWithArrow(
                 icon: Icons.notifications,
                 title: 'Meal Reminders',
-                value: true,
-                onChanged: (value) {
-                  // TODO: Toggle notifications
-                },
-              ),
-              _SettingsToggle(
-                icon: Icons.water_drop,
-                title: 'Water Reminders',
-                value: false,
-                onChanged: (value) {
-                  // TODO: Toggle water reminders
-                },
-              ),
-              _SettingsToggle(
-                icon: Icons.insights,
-                title: 'Weekly Summary',
-                value: true,
-                onChanged: (value) {
-                  // TODO: Toggle weekly summary
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // App Section
-          _SettingsSection(
-            title: 'App',
-            children: [
-              _SettingsTile(
-                icon: Icons.dark_mode,
-                title: 'Appearance',
-                subtitle: 'System default',
-                onTap: () {
-                  // TODO: Show appearance dialog
-                },
-              ),
-              _SettingsTile(
-                icon: Icons.language,
-                title: 'Language',
-                subtitle: 'English',
-                onTap: () {
-                  // TODO: Show language dialog
-                },
-              ),
-              _SettingsTile(
-                icon: Icons.straighten,
-                title: 'Units',
-                subtitle: 'Metric (kg, cm)',
-                onTap: () {
-                  // TODO: Show units dialog
+                subtitle: _mealRemindersEnabled ? 'Enabled' : 'Disabled',
+                onTap: () async {
+                  await context.push(AppRoutes.mealReminders);
+                  _loadSettings();
                 },
               ),
             ],
@@ -196,16 +125,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _SettingsTile(
                 icon: Icons.description,
                 title: 'Privacy Policy',
-                onTap: () {
-                  // TODO: Open privacy policy
-                },
+                onTap: () =>
+                    _openUrl('https://sites.google.com/view/snapie-ai/home'),
               ),
               _SettingsTile(
                 icon: Icons.article,
                 title: 'Terms of Service',
-                onTap: () {
-                  // TODO: Open terms of service
-                },
+                onTap: () => _openUrl(
+                  'https://sites.google.com/view/snapie-ai/terms-of-service',
+                ),
               ),
             ],
           ),
@@ -213,13 +141,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // Logout button
           Center(
-            child: TextButton(
-              onPressed: () {
-                // TODO: Implement logout
-              },
-              child: const Text(
-                'Log Out',
-                style: TextStyle(color: AppColors.error, fontSize: 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _showLogoutDialog(context),
+                icon: const Icon(Icons.logout, color: AppColors.error),
+                label: const Text(
+                  'Log Out',
+                  style: TextStyle(color: AppColors.error, fontSize: 16),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: const BorderSide(color: AppColors.error),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
           ),
@@ -229,59 +166,73 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  void _showApiKeyDialog(BuildContext context) {
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the link')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error opening link: $e')));
+      }
+    }
+  }
+
+  void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('OpenAI API Key'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter your OpenAI API key to enable AI features like food analysis, meal planning, and chat.',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _apiKeyController,
-              obscureText: !_showApiKey,
-              decoration: InputDecoration(
-                labelText: 'API Key',
-                hintText: 'sk-...',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _showApiKey ? Icons.visibility_off : Icons.visibility,
-                  ),
-                  onPressed: () => setState(() => _showApiKey = !_showApiKey),
-                ),
-              ),
-            ),
-          ],
-        ),
+        title: const Text('Log Out'),
+        content: const Text('Are you sure you want to log out?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              // API Key is now irrelevant as we use Cloud Functions
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
               Navigator.pop(context);
-
-              // final aiService = ref.read(aiServiceProvider);
-              // aiService.setApiKey(_apiKeyController.text);
-              // Navigator.pop(context);
-              // ScaffoldMessenger.of(
-              //   context,
-              // ).showSnackBar(const SnackBar(content: Text('API key saved!')));
-              // setState(() {});
+              await _performLogout();
             },
-            child: const Text('Save'),
+            child: const Text('Log Out'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _performLogout() async {
+    try {
+      // Sign out from Firebase
+      await FirebaseService.signOut();
+
+      // Clear local user profile but keep onboarding status
+      await ref.read(userProfileProvider.notifier).clearProfile();
+
+      // Cancel all notifications
+      await NotificationService.cancelAll();
+
+      if (mounted) {
+        // Navigate to auth screen
+        context.go(AppRoutes.auth);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error logging out: $e')));
+      }
+    }
   }
 
   void _showClearDataDialog(BuildContext context) {
@@ -301,9 +252,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () async {
               await StorageService.clearAll();
+              await NotificationService.cancelAll();
               if (context.mounted) {
                 Navigator.pop(context);
-                context.go('/onboarding');
+                context.go(AppRoutes.onboarding);
               }
             },
             child: const Text('Clear All'),
@@ -404,39 +356,56 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
-class _SettingsToggle extends StatelessWidget {
+class _SettingsTileWithArrow extends StatelessWidget {
   final IconData icon;
   final String title;
-  final bool value;
-  final ValueChanged<bool> onChanged;
+  final String subtitle;
+  final VoidCallback onTap;
 
-  const _SettingsToggle({
+  const _SettingsTileWithArrow({
     required this.icon,
     required this.title,
-    required this.value,
-    required this.onChanged,
+    required this.subtitle,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.textSecondary, size: 22),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.textSecondary, size: 22),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: subtitle == 'Enabled'
+                          ? AppColors.success
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppColors.primary,
-          ),
-        ],
+            const Icon(Icons.chevron_right, color: AppColors.textHint),
+          ],
+        ),
       ),
     );
   }

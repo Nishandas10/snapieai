@@ -10,6 +10,7 @@ import 'core/config/app_config.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/storage_service.dart';
+import 'core/services/notification_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -31,6 +32,9 @@ void main() async {
 
       // Initialize storage service
       await StorageService.init();
+
+      // Initialize notification service
+      await NotificationService.init();
 
       // Set preferred orientations
       await SystemChrome.setPreferredOrientations([
