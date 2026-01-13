@@ -143,7 +143,7 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen>
   }
 
   void _addFood(MealType mealType) {
-    context.push(AppRoutes.addFood);
+    context.push(AppRoutes.addFood, extra: {'mealType': mealType});
   }
 
   void _deleteFood(MealType mealType, String foodId) {

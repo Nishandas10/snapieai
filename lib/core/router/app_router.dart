@@ -153,7 +153,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.addFood,
         name: 'addFood',
-        builder: (context, state) => const AddFoodScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return AddFoodScreen(
+            initialMealType: extra?['mealType'] as MealType?,
+          );
+        },
       ),
       GoRoute(
         path: '${AppRoutes.foodDetail}/:id',

@@ -13,7 +13,9 @@ import '../../../core/services/ai_service.dart';
 import '../../../core/services/subscription_service.dart';
 
 class AddFoodScreen extends ConsumerStatefulWidget {
-  const AddFoodScreen({super.key});
+  final MealType? initialMealType;
+
+  const AddFoodScreen({super.key, this.initialMealType});
 
   @override
   ConsumerState<AddFoodScreen> createState() => _AddFoodScreenState();
@@ -29,9 +31,15 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
   final _servingSizeController = TextEditingController(text: '1');
   final _servingUnitController = TextEditingController(text: 'serving');
 
-  MealType _selectedMealType = MealType.lunch;
+  late MealType _selectedMealType;
   bool _isLoading = false;
   bool _isAIMode = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMealType = widget.initialMealType ?? MealType.lunch;
+  }
 
   @override
   void dispose() {
