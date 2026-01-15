@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:country_picker/country_picker.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
@@ -23,7 +24,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   String _selectedGender = '';
   String _selectedActivityLevel = 'moderate';
-  String _selectedCountry = 'US';
+  Country _selectedCountry = CountryParser.parseCountryCode('US');
 
   final List<Map<String, String>> _activityLevels = [
     {
@@ -35,15 +36,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     {'value': 'moderate', 'label': 'Moderate', 'desc': '3-5 days/week'},
     {'value': 'active', 'label': 'Active', 'desc': '6-7 days/week'},
     {'value': 'very_active', 'label': 'Very Active', 'desc': 'Athlete level'},
-  ];
-
-  final List<Map<String, String>> _countries = [
-    {'code': 'US', 'name': 'United States'},
-    {'code': 'IN', 'name': 'India'},
-    {'code': 'UK', 'name': 'United Kingdom'},
-    {'code': 'AU', 'name': 'Australia'},
-    {'code': 'CA', 'name': 'Canada'},
-    {'code': 'OTHER', 'name': 'Other'},
   ];
 
   @override
@@ -68,7 +60,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           heightCm: double.tryParse(_heightController.text),
           weightKg: double.tryParse(_weightController.text),
           activityLevel: _selectedActivityLevel,
-          country: _selectedCountry,
+          country: _selectedCountry.countryCode,
         );
 
     if (mounted) {
@@ -226,27 +218,70 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _selectedCountry,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: AppColors.inputBackground,
-                  border: OutlineInputBorder(
+              InkWell(
+                onTap: () {
+                  showCountryPicker(
+                    context: context,
+                    showPhoneCode: false,
+                    showWorldWide: false,
+                    showSearch: true,
+                    countryListTheme: CountryListThemeData(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                      inputDecoration: InputDecoration(
+                        hintText: 'Search country',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                      ),
+                      searchTextStyle: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                      ),
+                    ),
+                    onSelect: (Country country) {
+                      setState(() => _selectedCountry = country);
+                    },
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.inputBackground,
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        _selectedCountry.flagEmoji,
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _selectedCountry.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
                   ),
                 ),
-                items: _countries.map((country) {
-                  return DropdownMenuItem(
-                    value: country['code'],
-                    child: Text(country['name']!),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedCountry = value);
-                  }
-                },
               ),
               const SizedBox(height: 32),
 

@@ -2,7 +2,7 @@ name: snapieai
 description: "AI Calorie Counter & Nutrition Intelligence App"
 publish_to: 'none'
 
-version: 1.0.0+101
+version: 1.0.0+102
 
 environment:
   sdk: ^3.10.7
@@ -83,6 +83,9 @@ dependencies:
   
   # In-App Purchases & Subscriptions
   adapty_flutter: ^3.4.0
+  
+  # Country Picker
+  country_picker: ^2.0.26
 
 dev_dependencies:
   flutter_test:
@@ -106,10 +109,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # App assets
+  assets:
+    - assets/
+    - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

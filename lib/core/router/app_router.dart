@@ -115,7 +115,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.auth,
         name: 'auth',
-        builder: (context, state) => const AuthScreen(),
+        builder: (context, state) {
+          // Check if we should show signup screen (coming from onboarding)
+          final showSignup = state.uri.queryParameters['signup'] == 'true';
+          return AuthScreen(initialShowLogin: !showSignup);
+        },
       ),
       ShellRoute(
         builder: (context, state, child) => MainNavigationScreen(child: child),

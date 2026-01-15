@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -9,7 +10,9 @@ import '../../../core/router/app_router.dart';
 import '../../../core/providers/user_provider.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
-  const AuthScreen({super.key});
+  final bool initialShowLogin;
+
+  const AuthScreen({super.key, this.initialShowLogin = true});
 
   @override
   ConsumerState<AuthScreen> createState() => _AuthScreenState();
@@ -21,10 +24,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
 
-  bool _isLogin = true;
+  late bool _isLogin;
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLogin = widget.initialShowLogin;
+  }
 
   @override
   void dispose() {
@@ -289,12 +298,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       height: 56,
       child: OutlinedButton.icon(
         onPressed: _isLoading ? null : _handleGoogleSignIn,
-        icon: Image.network(
-          'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+        icon: SvgPicture.asset(
+          'assets/icons/google_logo.svg',
           width: 24,
           height: 24,
-          errorBuilder: (_, __, ___) =>
-              const Icon(Icons.g_mobiledata, size: 24),
         ),
         label: const Text(
           'Continue with Google',
@@ -354,7 +361,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           password: _passwordController.text,
         );
 
-        // Check if user has completed onboarding by checking Firestore data
+        // Check if user has profile data in Firestore
         final userId = FirebaseService.currentUser?.uid;
         if (userId != null) {
           // Initialize subscription for user
@@ -372,9 +379,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               context.go(AppRoutes.home);
             }
           } else {
-            // User logged in but no profile data, go to onboarding
-            if (mounted) {
-              context.go(AppRoutes.profileSetup);
+            // User logged in but no profile data in Firestore
+            // Check if they have local onboarding data to sync
+            final localProfile = ref.read(userProfileProvider);
+            if (localProfile != null && localProfile.id.isNotEmpty) {
+              // Sync local onboarding data to Firestore
+              await ref.read(userProfileProvider.notifier).syncToFirestore();
+              await SubscriptionService.initUserSubscription(userId);
+              if (mounted) {
+                context.go(AppRoutes.home);
+              }
+            } else {
+              // No local data either, go to onboarding
+              await SubscriptionService.initUserSubscription(userId);
+              if (mounted) {
+                context.go(AppRoutes.profileSetup);
+              }
             }
           }
         }
@@ -397,11 +417,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           await ref
               .read(subscriptionProvider.notifier)
               .loadSubscription(userId);
-        }
 
-        // New user, go to profile setup
-        if (mounted) {
-          context.go(AppRoutes.profileSetup);
+          // Check if user has local onboarding data to sync
+          final localProfile = ref.read(userProfileProvider);
+          if (localProfile != null && localProfile.id.isNotEmpty) {
+            // Sync local onboarding data to Firestore
+            await ref.read(userProfileProvider.notifier).syncToFirestore();
+            if (mounted) {
+              context.go(AppRoutes.home);
+            }
+          } else {
+            // No local data, go to onboarding
+            if (mounted) {
+              context.go(AppRoutes.profileSetup);
+            }
+          }
         }
       }
     } catch (e) {
@@ -425,7 +455,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       final credential = await FirebaseService.signInWithGoogle();
 
       if (credential != null && mounted) {
-        // Check if user has completed onboarding by checking Firestore data
+        // Check if user has profile data in Firestore
         final userId = FirebaseService.currentUser?.uid;
         if (userId != null) {
           // Initialize subscription for user
@@ -443,10 +473,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               context.go(AppRoutes.home);
             }
           } else {
-            // New user or user without profile, initialize subscription data and go to onboarding
-            await SubscriptionService.initUserSubscription(userId);
-            if (mounted) {
-              context.go(AppRoutes.profileSetup);
+            // User signed in but no profile data in Firestore
+            // Check if they have local onboarding data to sync
+            final localProfile = ref.read(userProfileProvider);
+            if (localProfile != null && localProfile.id.isNotEmpty) {
+              // Sync local onboarding data to Firestore
+              await ref.read(userProfileProvider.notifier).syncToFirestore();
+              await SubscriptionService.initUserSubscription(userId);
+              if (mounted) {
+                context.go(AppRoutes.home);
+              }
+            } else {
+              // No local data either, go to onboarding
+              await SubscriptionService.initUserSubscription(userId);
+              if (mounted) {
+                context.go(AppRoutes.profileSetup);
+              }
             }
           }
         }
@@ -494,21 +536,33 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final errorStr = error.toString().toLowerCase();
 
     if (errorStr.contains('user-not-found')) {
-      return 'No account found with this email';
-    } else if (errorStr.contains('wrong-password')) {
-      return 'Incorrect password';
+      return 'No account found with this email. Please sign up first.';
+    } else if (errorStr.contains('wrong-password') ||
+        errorStr.contains('invalid-credential')) {
+      return 'Incorrect email or password. Please try again.';
     } else if (errorStr.contains('email-already-in-use')) {
-      return 'An account already exists with this email';
+      return 'An account already exists with this email. Please sign in instead.';
     } else if (errorStr.contains('weak-password')) {
-      return 'Password is too weak';
+      return 'Password is too weak. Use at least 6 characters.';
     } else if (errorStr.contains('invalid-email')) {
-      return 'Invalid email address';
+      return 'Please enter a valid email address.';
     } else if (errorStr.contains('network')) {
-      return 'Network error. Please check your connection';
+      return 'Network error. Please check your internet connection.';
     } else if (errorStr.contains('too-many-requests')) {
-      return 'Too many attempts. Please try again later';
+      return 'Too many failed attempts. Please try again later.';
+    } else if (errorStr.contains('user-disabled')) {
+      return 'This account has been disabled. Please contact support.';
+    } else if (errorStr.contains('operation-not-allowed')) {
+      return 'This sign-in method is not enabled. Please try another method.';
+    } else if (errorStr.contains('account-exists-with-different-credential')) {
+      return 'An account already exists with a different sign-in method.';
+    } else if (errorStr.contains('requires-recent-login')) {
+      return 'Please sign in again to complete this action.';
+    } else if (errorStr.contains('popup-closed-by-user') ||
+        errorStr.contains('cancelled')) {
+      return 'Sign in was cancelled. Please try again.';
     }
 
-    return 'An error occurred. Please try again';
+    return 'Something went wrong. Please try again.';
   }
 }
