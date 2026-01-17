@@ -8,6 +8,11 @@ class UserProfile extends Equatable {
   final String? gender;
   final double? heightCm;
   final double? weightKg;
+  final double? targetWeightKg; // Desired weight for lose_fat/gain_muscle goals
+  final double?
+  startingWeightKg; // Starting weight when goal was set (for progress tracking)
+  final double?
+  weeklyWeightGoalKg; // Weekly weight change goal (e.g., 0.5 kg/week)
   final String activityLevel;
   final String country;
   final String goal;
@@ -25,6 +30,9 @@ class UserProfile extends Equatable {
     this.gender,
     this.heightCm,
     this.weightKg,
+    this.targetWeightKg,
+    this.startingWeightKg,
+    this.weeklyWeightGoalKg,
     this.activityLevel = 'moderate',
     this.country = 'US',
     this.goal = 'maintain',
@@ -61,6 +69,47 @@ class UserProfile extends Equatable {
   bool get hasThyroidIssues => healthConditions.contains('thyroid');
   bool get hasHeartHealthFocus => healthConditions.contains('heart_health');
 
+  /// Returns true if the user's goal requires weight tracking (lose_fat or gain_muscle)
+  bool get hasWeightGoal => goal == 'lose_fat' || goal == 'gain_muscle';
+
+  /// Calculate weight progress percentage (0.0 to 1.0)
+  /// Uses startingWeightKg to calculate actual progress from start to target
+  double? get weightProgressPercentage {
+    if (!hasWeightGoal || weightKg == null || targetWeightKg == null) {
+      return null;
+    }
+
+    // Use starting weight if available, otherwise use current weight as starting point
+    final starting = startingWeightKg ?? weightKg!;
+    final current = weightKg!;
+    final target = targetWeightKg!;
+
+    // Calculate total distance from start to target
+    final totalDistance = (starting - target).abs();
+    if (totalDistance == 0) return 1.0; // Already at target
+
+    // Calculate how much progress has been made
+    final isLosing = goal == 'lose_fat';
+
+    if (isLosing) {
+      // For weight loss: progress = how much weight lost / total to lose
+      final weightLost = starting - current;
+      final progress = weightLost / totalDistance;
+      return progress.clamp(0.0, 1.0);
+    } else {
+      // For muscle gain: progress = how much weight gained / total to gain
+      final weightGained = current - starting;
+      final progress = weightGained / totalDistance;
+      return progress.clamp(0.0, 1.0);
+    }
+  }
+
+  /// Get weight difference to target
+  double? get weightToTarget {
+    if (weightKg == null || targetWeightKg == null) return null;
+    return (weightKg! - targetWeightKg!).abs();
+  }
+
   UserProfile copyWith({
     String? id,
     String? name,
@@ -68,6 +117,9 @@ class UserProfile extends Equatable {
     String? gender,
     double? heightCm,
     double? weightKg,
+    double? targetWeightKg,
+    double? startingWeightKg,
+    double? weeklyWeightGoalKg,
     String? activityLevel,
     String? country,
     String? goal,
@@ -85,6 +137,9 @@ class UserProfile extends Equatable {
       gender: gender ?? this.gender,
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
+      targetWeightKg: targetWeightKg ?? this.targetWeightKg,
+      startingWeightKg: startingWeightKg ?? this.startingWeightKg,
+      weeklyWeightGoalKg: weeklyWeightGoalKg ?? this.weeklyWeightGoalKg,
       activityLevel: activityLevel ?? this.activityLevel,
       country: country ?? this.country,
       goal: goal ?? this.goal,
@@ -105,6 +160,9 @@ class UserProfile extends Equatable {
       'gender': gender,
       'heightCm': heightCm,
       'weightKg': weightKg,
+      'targetWeightKg': targetWeightKg,
+      'startingWeightKg': startingWeightKg,
+      'weeklyWeightGoalKg': weeklyWeightGoalKg,
       'activityLevel': activityLevel,
       'country': country,
       'goal': goal,
@@ -125,6 +183,9 @@ class UserProfile extends Equatable {
       gender: json['gender'] as String?,
       heightCm: (json['heightCm'] as num?)?.toDouble(),
       weightKg: (json['weightKg'] as num?)?.toDouble(),
+      targetWeightKg: (json['targetWeightKg'] as num?)?.toDouble(),
+      startingWeightKg: (json['startingWeightKg'] as num?)?.toDouble(),
+      weeklyWeightGoalKg: (json['weeklyWeightGoalKg'] as num?)?.toDouble(),
       activityLevel: json['activityLevel'] as String? ?? 'moderate',
       country: json['country'] as String? ?? 'US',
       goal: json['goal'] as String? ?? 'maintain',
@@ -164,6 +225,9 @@ class UserProfile extends Equatable {
     gender,
     heightCm,
     weightKg,
+    targetWeightKg,
+    startingWeightKg,
+    weeklyWeightGoalKg,
     activityLevel,
     country,
     goal,

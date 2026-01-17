@@ -93,12 +93,18 @@ class _HealthConditionsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(userProfileProvider);
+    final hasWeightGoal =
+        user?.goal == 'lose_fat' || user?.goal == 'gain_muscle';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Health Conditions'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppRoutes.goals),
+          onPressed: () => context.go(
+            hasWeightGoal ? AppRoutes.weightGoalSpeed : AppRoutes.goals,
+          ),
         ),
       ),
       body: SafeArea(

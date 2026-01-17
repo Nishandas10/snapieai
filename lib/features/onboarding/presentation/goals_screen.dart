@@ -69,7 +69,12 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
         .updateProfile(goal: _selectedGoal);
 
     if (mounted) {
-      context.go(AppRoutes.healthConditions);
+      // If user selects lose_fat or gain_muscle, show additional weight goal screens
+      if (_selectedGoal == 'lose_fat' || _selectedGoal == 'gain_muscle') {
+        context.go(AppRoutes.targetWeight);
+      } else {
+        context.go(AppRoutes.healthConditions);
+      }
     }
   }
 

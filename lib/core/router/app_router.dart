@@ -12,6 +12,8 @@ import '../../features/onboarding/presentation/health_conditions_screen.dart';
 import '../../features/onboarding/presentation/dietary_preferences_screen.dart';
 import '../../features/onboarding/presentation/plan_generation_screen.dart';
 import '../../features/onboarding/presentation/auth_screen.dart';
+import '../../features/onboarding/presentation/target_weight_screen.dart';
+import '../../features/onboarding/presentation/weight_goal_speed_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/home/presentation/main_navigation_screen.dart';
 import '../../features/food_log/presentation/food_log_screen.dart';
@@ -45,6 +47,8 @@ class AppRoutes {
   static const String auth = '/auth';
   static const String profileSetup = '/profile-setup';
   static const String goals = '/goals';
+  static const String targetWeight = '/target-weight';
+  static const String weightGoalSpeed = '/weight-goal-speed';
   static const String healthConditions = '/health-conditions';
   static const String dietaryPreferences = '/dietary-preferences';
   static const String planGeneration = '/plan-generation';
@@ -100,6 +104,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.goals,
         name: 'goals',
         builder: (context, state) => const GoalsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.targetWeight,
+        name: 'targetWeight',
+        builder: (context, state) => const TargetWeightScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.weightGoalSpeed,
+        name: 'weightGoalSpeed',
+        builder: (context, state) => const WeightGoalSpeedScreen(),
       ),
       GoRoute(
         path: AppRoutes.healthConditions,
