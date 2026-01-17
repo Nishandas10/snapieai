@@ -156,10 +156,10 @@ class HomeScreen extends ConsumerWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _QuickActionCard(
-                            icon: Icons.edit_note,
-                            label: 'Log Manually',
+                            icon: Icons.qr_code_scanner,
+                            label: 'Scan Barcode',
                             color: AppColors.secondary,
-                            onTap: () => context.push(AppRoutes.addFood),
+                            onTap: () => context.push(AppRoutes.barcodeScanner),
                           ),
                         ),
                         const SizedBox(width: 12),

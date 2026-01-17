@@ -328,6 +328,54 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
                     ),
                   ),
                 ),
+
+                // More Actions Section
+                const SizedBox(height: 32),
+                const Text(
+                  'More Actions',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ActionCard(
+                        icon: Icons.qr_code_scanner,
+                        label: 'Scan Barcode',
+                        color: AppColors.secondary,
+                        onTap: () => context.push(
+                          AppRoutes.barcodeScanner,
+                          extra: {'mealType': _selectedMealType},
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ActionCard(
+                        icon: Icons.mic,
+                        label: 'Voice Log',
+                        color: AppColors.accent,
+                        onTap: () => context.push(
+                          AppRoutes.voiceInput,
+                          extra: {'mealType': _selectedMealType},
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ActionCard(
+                        icon: Icons.auto_awesome,
+                        label: 'Ask Sara',
+                        color: AppColors.primary,
+                        onTap: () => context.push(AppRoutes.chat),
+                      ),
+                    ),
+                  ],
+                ),
               ],
 
               if (!_isAIMode) ...[
@@ -454,6 +502,51 @@ class _ModeButton extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: isSelected ? Colors.white : AppColors.textSecondary,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionCard({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 28, color: color),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

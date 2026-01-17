@@ -148,6 +148,24 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
     return null;
   }
 
+  /// Check if the image path is a network URL
+  bool _isNetworkImage(String? path) {
+    if (path == null) return false;
+    return path.startsWith('http://') || path.startsWith('https://');
+  }
+
+  /// Get the appropriate image provider for the image path
+  ImageProvider? _getImageProvider() {
+    final path = _getImagePath();
+    if (path == null) return null;
+
+    if (_isNetworkImage(path)) {
+      return NetworkImage(path);
+    } else {
+      return FileImage(File(path));
+    }
+  }
+
   FoodItem _buildUpdatedFood() {
     return _food.copyWith(
       name: _nameController.text.trim(),
@@ -426,7 +444,7 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 image: DecorationImage(
-                  image: FileImage(File(_getImagePath()!)),
+                  image: _getImageProvider()!,
                   fit: BoxFit.cover,
                 ),
               ),

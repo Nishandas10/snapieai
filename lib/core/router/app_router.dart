@@ -35,6 +35,8 @@ import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/settings/presentation/health_settings_screen.dart';
 import '../../features/history/presentation/history_screen.dart';
 import '../../features/subscription/presentation/paywall_screen.dart';
+import '../../features/barcode/presentation/barcode_scanner_screen.dart';
+import '../../features/voice/presentation/voice_input_screen.dart';
 
 /// Application routes
 class AppRoutes {
@@ -69,6 +71,8 @@ class AppRoutes {
   static const String healthSettings = '/health-settings';
   static const String history = '/history';
   static const String paywall = '/paywall';
+  static const String barcodeScanner = '/barcode-scanner';
+  static const String voiceInput = '/voice-input';
 }
 
 /// Provider for GoRouter
@@ -268,6 +272,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           return PaywallScreen(featureType: extra?['featureType'] as String?);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.barcodeScanner,
+        name: 'barcodeScanner',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return BarcodeScannerScreen(
+            mealType: extra?['mealType'] as MealType?,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.voiceInput,
+        name: 'voiceInput',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return VoiceInputScreen(mealType: extra?['mealType'] as MealType?);
         },
       ),
     ],
