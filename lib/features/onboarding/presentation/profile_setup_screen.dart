@@ -20,11 +20,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
   final _heightController = TextEditingController();
+  final _heightInchesController = TextEditingController();
   final _weightController = TextEditingController();
 
   String _selectedGender = '';
   String _selectedActivityLevel = 'moderate';
   Country _selectedCountry = CountryParser.parseCountryCode('US');
+  bool _isMetric =
+      true; // true = metric (cm, kg), false = imperial (ft/in, lbs)
 
   final List<Map<String, String>> _activityLevels = [
     {
@@ -43,8 +46,76 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _nameController.dispose();
     _ageController.dispose();
     _heightController.dispose();
+    _heightInchesController.dispose();
     _weightController.dispose();
     super.dispose();
+  }
+
+  // Convert height from cm to feet and inches
+  void _convertHeightToImperial(double cm) {
+    final totalInches = cm / 2.54;
+    final feet = (totalInches / 12).floor();
+    final inches = (totalInches % 12).round();
+    _heightController.text = feet.toString();
+    _heightInchesController.text = inches.toString();
+  }
+
+  // Convert height from feet/inches to cm
+  double _getHeightInCm() {
+    if (_isMetric) {
+      return double.tryParse(_heightController.text) ?? 0;
+    } else {
+      final feet = double.tryParse(_heightController.text) ?? 0;
+      final inches = double.tryParse(_heightInchesController.text) ?? 0;
+      return (feet * 12 + inches) * 2.54;
+    }
+  }
+
+  // Convert weight from kg to lbs
+  void _convertWeightToImperial(double kg) {
+    final lbs = kg * 2.20462;
+    _weightController.text = lbs.round().toString();
+  }
+
+  // Convert weight from lbs to kg
+  double _getWeightInKg() {
+    if (_isMetric) {
+      return double.tryParse(_weightController.text) ?? 0;
+    } else {
+      final lbs = double.tryParse(_weightController.text) ?? 0;
+      return lbs / 2.20462;
+    }
+  }
+
+  void _toggleUnit(bool isMetric) {
+    if (_isMetric == isMetric) return;
+
+    setState(() {
+      if (isMetric) {
+        // Converting from imperial to metric
+        final heightCm = _getHeightInCm();
+        final weightKg = _getWeightInKg();
+        _isMetric = true;
+        if (heightCm > 0) {
+          _heightController.text = heightCm.round().toString();
+        }
+        if (weightKg > 0) {
+          _weightController.text = weightKg.round().toString();
+        }
+        _heightInchesController.clear();
+      } else {
+        // Converting from metric to imperial
+        final heightCm = double.tryParse(_heightController.text) ?? 0;
+        final weightKg = double.tryParse(_weightController.text) ?? 0;
+        _isMetric = false;
+        if (heightCm > 0) {
+          _convertHeightToImperial(heightCm);
+        }
+        if (weightKg > 0) {
+          _convertWeightToImperial(weightKg);
+        }
+      }
+    });
   }
 
   Future<void> _continue() async {
@@ -57,8 +128,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           name: _nameController.text.trim(),
           age: int.tryParse(_ageController.text),
           gender: _selectedGender.isNotEmpty ? _selectedGender : null,
-          heightCm: double.tryParse(_heightController.text),
-          weightKg: double.tryParse(_weightController.text),
+          heightCm: _getHeightInCm(),
+          weightKg: _getWeightInKg(),
           activityLevel: _selectedActivityLevel,
           country: _selectedCountry.countryCode,
         );
@@ -159,28 +230,142 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Height & Weight
+              // Unit Toggle
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: CustomTextField(
-                      controller: _heightController,
-                      label: 'Height (cm)',
-                      hint: 'e.g., 170',
-                      keyboardType: TextInputType.number,
+                  const Text(
+                    'Height & Weight',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: CustomTextField(
-                      controller: _weightController,
-                      label: 'Weight (kg)',
-                      hint: 'e.g., 70',
-                      keyboardType: TextInputType.number,
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.inputBackground,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _toggleUnit(true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _isMetric
+                                  ? AppColors.primary
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Metric',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: _isMetric
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => _toggleUnit(false),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: !_isMetric
+                                  ? AppColors.primary
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Imperial',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: !_isMetric
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+
+              // Height & Weight Fields
+              if (_isMetric)
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomTextField(
+                        controller: _heightController,
+                        label: 'Height (cm)',
+                        hint: 'e.g., 170',
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: CustomTextField(
+                        controller: _weightController,
+                        label: 'Weight (kg)',
+                        hint: 'e.g., 70',
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CustomTextField(
+                            controller: _heightController,
+                            label: 'Height (ft)',
+                            hint: 'e.g., 5',
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: CustomTextField(
+                            controller: _heightInchesController,
+                            label: 'Inches',
+                            hint: 'e.g., 7',
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: CustomTextField(
+                            controller: _weightController,
+                            label: 'Weight (lbs)',
+                            hint: 'e.g., 154',
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               const SizedBox(height: 20),
 
               // Activity Level

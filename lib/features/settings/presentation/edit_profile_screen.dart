@@ -17,11 +17,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
   final _heightController = TextEditingController();
+  final _heightInchesController = TextEditingController();
   final _weightController = TextEditingController();
 
   String _selectedGender = '';
   String _selectedActivityLevel = 'moderate';
   bool _isLoading = false;
+  bool _isMetric =
+      true; // true = metric (cm, kg), false = imperial (ft/in, lbs)
 
   final List<Map<String, String>> _activityLevels = [
     {
@@ -58,8 +61,76 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _nameController.dispose();
     _ageController.dispose();
     _heightController.dispose();
+    _heightInchesController.dispose();
     _weightController.dispose();
     super.dispose();
+  }
+
+  // Convert height from cm to feet and inches
+  void _convertHeightToImperial(double cm) {
+    final totalInches = cm / 2.54;
+    final feet = (totalInches / 12).floor();
+    final inches = (totalInches % 12).round();
+    _heightController.text = feet.toString();
+    _heightInchesController.text = inches.toString();
+  }
+
+  // Convert height from feet/inches to cm
+  double _getHeightInCm() {
+    if (_isMetric) {
+      return double.tryParse(_heightController.text) ?? 0;
+    } else {
+      final feet = double.tryParse(_heightController.text) ?? 0;
+      final inches = double.tryParse(_heightInchesController.text) ?? 0;
+      return (feet * 12 + inches) * 2.54;
+    }
+  }
+
+  // Convert weight from kg to lbs
+  void _convertWeightToImperial(double kg) {
+    final lbs = kg * 2.20462;
+    _weightController.text = lbs.round().toString();
+  }
+
+  // Convert weight from lbs to kg
+  double _getWeightInKg() {
+    if (_isMetric) {
+      return double.tryParse(_weightController.text) ?? 0;
+    } else {
+      final lbs = double.tryParse(_weightController.text) ?? 0;
+      return lbs / 2.20462;
+    }
+  }
+
+  void _toggleUnit(bool isMetric) {
+    if (_isMetric == isMetric) return;
+
+    setState(() {
+      if (isMetric) {
+        // Converting from imperial to metric
+        final heightCm = _getHeightInCm();
+        final weightKg = _getWeightInKg();
+        _isMetric = true;
+        if (heightCm > 0) {
+          _heightController.text = heightCm.round().toString();
+        }
+        if (weightKg > 0) {
+          _weightController.text = weightKg.round().toString();
+        }
+        _heightInchesController.clear();
+      } else {
+        // Converting from metric to imperial
+        final heightCm = double.tryParse(_heightController.text) ?? 0;
+        final weightKg = double.tryParse(_weightController.text) ?? 0;
+        _isMetric = false;
+        if (heightCm > 0) {
+          _convertHeightToImperial(heightCm);
+        }
+        if (weightKg > 0) {
+          _convertWeightToImperial(weightKg);
+        }
+      }
+    });
   }
 
   Future<void> _saveProfile() async {
@@ -80,8 +151,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             name: _nameController.text.trim(),
             age: int.parse(_ageController.text),
             gender: _selectedGender,
-            heightCm: double.parse(_heightController.text),
-            weightKg: double.parse(_weightController.text),
+            heightCm: _getHeightInCm(),
+            weightKg: _getWeightInKg(),
             activityLevel: _selectedActivityLevel,
           );
 
@@ -202,54 +273,202 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Height & Weight
+            // Unit Toggle
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _heightController,
-                    decoration: const InputDecoration(
-                      labelText: 'Height',
-                      prefixIcon: Icon(Icons.height),
-                      suffixText: 'cm',
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Required';
-                      }
-                      final height = double.tryParse(value);
-                      if (height == null || height < 100 || height > 250) {
-                        return 'Invalid';
-                      }
-                      return null;
-                    },
+                const Text(
+                  'Height & Weight',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    controller: _weightController,
-                    decoration: const InputDecoration(
-                      labelText: 'Weight',
-                      prefixIcon: Icon(Icons.monitor_weight_outlined),
-                      suffixText: 'kg',
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Required';
-                      }
-                      final weight = double.tryParse(value);
-                      if (weight == null || weight < 30 || weight > 300) {
-                        return 'Invalid';
-                      }
-                      return null;
-                    },
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.inputBackground,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _toggleUnit(true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _isMetric
+                                ? AppColors.primary
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Metric',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: _isMetric
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => _toggleUnit(false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: !_isMetric
+                                ? AppColors.primary
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Imperial',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: !_isMetric
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+
+            // Height & Weight Fields
+            if (_isMetric)
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _heightController,
+                      decoration: const InputDecoration(
+                        labelText: 'Height',
+                        prefixIcon: Icon(Icons.height),
+                        suffixText: 'cm',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Required';
+                        }
+                        final height = double.tryParse(value);
+                        if (height == null || height < 100 || height > 250) {
+                          return 'Invalid';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _weightController,
+                      decoration: const InputDecoration(
+                        labelText: 'Weight',
+                        prefixIcon: Icon(Icons.monitor_weight_outlined),
+                        suffixText: 'kg',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Required';
+                        }
+                        final weight = double.tryParse(value);
+                        if (weight == null || weight < 30 || weight > 300) {
+                          return 'Invalid';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _heightController,
+                      decoration: const InputDecoration(
+                        labelText: 'Feet',
+                        prefixIcon: Icon(Icons.height),
+                        suffixText: 'ft',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Required';
+                        }
+                        final feet = double.tryParse(value);
+                        if (feet == null || feet < 3 || feet > 8) {
+                          return 'Invalid';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _heightInchesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Inches',
+                        suffixText: 'in',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Required';
+                        }
+                        final inches = double.tryParse(value);
+                        if (inches == null || inches < 0 || inches > 11) {
+                          return 'Invalid';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _weightController,
+                      decoration: const InputDecoration(
+                        labelText: 'Weight',
+                        prefixIcon: Icon(Icons.monitor_weight_outlined),
+                        suffixText: 'lbs',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Required';
+                        }
+                        final weight = double.tryParse(value);
+                        if (weight == null || weight < 66 || weight > 660) {
+                          return 'Invalid';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 24),
 
             // Activity Level

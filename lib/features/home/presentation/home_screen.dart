@@ -221,7 +221,10 @@ class HomeScreen extends ConsumerWidget {
                     mealType: mealType,
                     meal: meal,
                     onTap: () => context.go(AppRoutes.foodLog, extra: index),
-                    onAdd: () => context.push(AppRoutes.addFood),
+                    onAdd: () => context.push(
+                      AppRoutes.addFood,
+                      extra: {'mealType': mealType},
+                    ),
                   ),
                 );
               }, childCount: 4),

@@ -33,6 +33,8 @@ class FoodItem extends Equatable {
   final double? vitaminAPercent;
   final double? vitaminCPercent;
   final double? healthScore;
+  // Sub-items for meal entries containing multiple foods
+  final List<FoodItem>? subItems;
 
   const FoodItem({
     required this.id,
@@ -64,6 +66,7 @@ class FoodItem extends Equatable {
     this.vitaminAPercent,
     this.vitaminCPercent,
     this.healthScore,
+    this.subItems,
   });
 
   double get totalMacroGrams => protein + carbs + fat;
@@ -116,6 +119,7 @@ class FoodItem extends Equatable {
     double? vitaminAPercent,
     double? vitaminCPercent,
     double? healthScore,
+    List<FoodItem>? subItems,
   }) {
     return FoodItem(
       id: id ?? this.id,
@@ -147,6 +151,7 @@ class FoodItem extends Equatable {
       vitaminAPercent: vitaminAPercent ?? this.vitaminAPercent,
       vitaminCPercent: vitaminCPercent ?? this.vitaminCPercent,
       healthScore: healthScore ?? this.healthScore,
+      subItems: subItems ?? this.subItems,
     );
   }
 
@@ -181,6 +186,7 @@ class FoodItem extends Equatable {
       'vitaminAPercent': vitaminAPercent,
       'vitaminCPercent': vitaminCPercent,
       'healthScore': healthScore,
+      'subItems': subItems?.map((item) => item.toJson()).toList(),
     };
   }
 
@@ -228,6 +234,9 @@ class FoodItem extends Equatable {
       vitaminAPercent: (json['vitaminAPercent'] as num?)?.toDouble(),
       vitaminCPercent: (json['vitaminCPercent'] as num?)?.toDouble(),
       healthScore: (json['healthScore'] as num?)?.toDouble(),
+      subItems: (json['subItems'] as List<dynamic>?)
+          ?.map((e) => FoodItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -273,5 +282,6 @@ class FoodItem extends Equatable {
     vitaminAPercent,
     vitaminCPercent,
     healthScore,
+    subItems,
   ];
 }

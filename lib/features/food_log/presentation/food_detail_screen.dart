@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,12 +14,14 @@ class FoodDetailScreen extends ConsumerStatefulWidget {
   final String foodId;
   final FoodItem? food;
   final MealType? mealType;
+  final String? imagePath;
 
   const FoodDetailScreen({
     super.key,
     required this.foodId,
     this.food,
     this.mealType,
+    this.imagePath,
   });
 
   @override
@@ -133,6 +137,15 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
     _vitaminCController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  /// Get the image path from widget parameter or from the food item
+  String? _getImagePath() {
+    // First check widget parameter (passed from analysis screen)
+    if (widget.imagePath != null) return widget.imagePath;
+    // Then check if the food item has an image path
+    if (_food.imagePath != null) return _food.imagePath;
+    return null;
   }
 
   FoodItem _buildUpdatedFood() {
@@ -405,6 +418,43 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          // Show food image if available
+          if (_getImagePath() != null && !_isEditing) ...[
+            Container(
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                image: DecorationImage(
+                  image: FileImage(File(_getImagePath()!)),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // Show all food items section when this is a combined meal with sub-items
+          if (_food.subItems != null &&
+              _food.subItems!.isNotEmpty &&
+              !_isEditing) ...[
+            const _SectionHeader(title: 'Individual Items in This Meal'),
+            const SizedBox(height: 12),
+            ..._food.subItems!.map((subItem) => _SubItemCard(food: subItem)),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+            const Text(
+              'Combined Meal Totals',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // Confidence badge
           if (!_isEditing && _food.confidence < 1.0) ...[
             _ConfidenceBadge(confidence: _food.confidence),
@@ -1390,5 +1440,137 @@ class _HealthScoreCard extends StatelessWidget {
     if (score >= 7) return 'This food has good nutritional value';
     if (score >= 4) return 'This food has average nutritional value';
     return 'Consider healthier alternatives';
+  }
+}
+
+/// Card displaying a sub-item in a combined meal
+class _SubItemCard extends StatelessWidget {
+  final FoodItem food;
+
+  const _SubItemCard({required this.food});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // Food info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    food.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${food.servingSize.toInt()}${food.servingUnit}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Calories
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${food.calories.toInt()}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.calories,
+                  ),
+                ),
+                const Text(
+                  'kcal',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            // Macros
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _MiniMacroBadge(
+                  label: 'P',
+                  value: food.protein,
+                  color: AppColors.protein,
+                ),
+                const SizedBox(height: 2),
+                _MiniMacroBadge(
+                  label: 'C',
+                  value: food.carbs,
+                  color: AppColors.carbs,
+                ),
+                const SizedBox(height: 2),
+                _MiniMacroBadge(
+                  label: 'F',
+                  value: food.fat,
+                  color: AppColors.fat,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniMacroBadge extends StatelessWidget {
+  final String label;
+  final double value;
+  final Color color;
+
+  const _MiniMacroBadge({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 2),
+        Text(
+          '${value.toInt()}g',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            color: color.withValues(alpha: 0.8),
+          ),
+        ),
+      ],
+    );
   }
 }

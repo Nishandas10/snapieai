@@ -173,6 +173,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             foodId: state.pathParameters['id']!,
             food: extra?['food'] as FoodItem?,
             mealType: extra?['mealType'] as MealType?,
+            imagePath: extra?['imagePath'] as String?,
           );
         },
       ),

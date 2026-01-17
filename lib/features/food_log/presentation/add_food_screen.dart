@@ -87,30 +87,27 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
       await ref.read(subscriptionProvider.notifier).recordAIScanUsage();
 
       final aiService = ref.read(aiServiceProvider);
-      final foods = await aiService.analyzeFoodText(
-        _descriptionController.text,
-      );
+      final food = await aiService.analyzeFoodText(_descriptionController.text);
 
-      if (foods.isNotEmpty) {
-        await ref
-            .read(foodLogProvider.notifier)
-            .addMultipleFoodsToMeal(_selectedMealType, foods);
+      await ref
+          .read(foodLogProvider.notifier)
+          .addFoodToMeal(_selectedMealType, food);
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Added ${foods.length} item(s) successfully!'),
-            ),
-          );
+      final itemCount = food.subItems?.length ?? 1;
 
-          // Navigate to food detail page for the first logged food
-          final food = foods.first;
-          context.pop();
-          context.push(
-            '${AppRoutes.foodDetail}/${food.id}',
-            extra: {'food': food, 'mealType': _selectedMealType},
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Added meal with $itemCount item(s) successfully!'),
+          ),
+        );
+
+        // Navigate to food detail page for the logged food
+        context.pop();
+        context.push(
+          '${AppRoutes.foodDetail}/${food.id}',
+          extra: {'food': food, 'mealType': _selectedMealType},
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -257,17 +254,48 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
               const SizedBox(height: 24),
 
               // Food description
-              CustomTextField(
-                controller: _descriptionController,
-                label: _isAIMode ? 'Describe your food' : 'Food name',
-                hint: _isAIMode
-                    ? 'e.g., 2 scrambled eggs with toast and butter'
-                    : 'e.g., Scrambled Eggs',
-                maxLines: _isAIMode ? 3 : 1,
-                prefixIcon: Icon(
-                  _isAIMode ? Icons.auto_awesome : Icons.restaurant,
+              if (_isAIMode)
+                CustomTextField(
+                  controller: _descriptionController,
+                  label: 'Describe your food',
+                  hint: 'e.g., 2 scrambled eggs with toast and butter',
+                  maxLines: 3,
+                  suffixIcon: Container(
+                    margin: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      onPressed: _isLoading ? null : _analyzeWithAI,
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.arrow_upward, color: Colors.white),
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                CustomTextField(
+                  controller: _descriptionController,
+                  label: 'Food name',
+                  hint: 'e.g., Scrambled Eggs',
+                  maxLines: 1,
+                  prefixIcon: const Icon(Icons.restaurant),
                 ),
-              ),
 
               if (_isAIMode) ...[
                 const SizedBox(height: 12),
@@ -277,6 +305,27 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
                     fontSize: 12,
                     color: AppColors.textHint,
                     fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Camera scan option
+                OutlinedButton.icon(
+                  onPressed: () {
+                    context.push(
+                      AppRoutes.camera,
+                      extra: {'mealType': _selectedMealType},
+                    );
+                  },
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Or scan with camera'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
@@ -349,14 +398,15 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
                 ),
               ],
 
-              const SizedBox(height: 32),
-
-              PrimaryButton(
-                text: _isAIMode ? 'Analyze with AI' : 'Add Food',
-                icon: _isAIMode ? Icons.auto_awesome : Icons.add,
-                onPressed: _isAIMode ? _analyzeWithAI : _addManually,
-                isLoading: _isLoading,
-              ),
+              if (!_isAIMode) ...[
+                const SizedBox(height: 32),
+                PrimaryButton(
+                  text: 'Add Food',
+                  icon: Icons.add,
+                  onPressed: _addManually,
+                  isLoading: _isLoading,
+                ),
+              ],
             ],
           ),
         ),

@@ -32,7 +32,7 @@ class AIService {
   }
 
   /// Analyze food from image using Cloud Function
-  Future<List<FoodItem>> analyzeFoodImage(String imagePath) async {
+  Future<FoodItem> analyzeFoodImage(String imagePath) async {
     _checkAuth();
 
     try {
@@ -58,37 +58,24 @@ class AIService {
 
       final analysisData = Map<String, dynamic>.from(data['data'] as Map);
 
-      // Convert the single analysis result to FoodItem format
-      final foodItem = FoodItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: analysisData['foodName'] ?? 'Unknown Food',
-        calories: (analysisData['calories'] ?? 0).toDouble(),
-        protein: (analysisData['protein'] ?? 0).toDouble(),
-        carbs: (analysisData['carbohydrates'] ?? 0).toDouble(),
-        fat: (analysisData['fat'] ?? 0).toDouble(),
-        fiber: (analysisData['fiber'] ?? 0).toDouble(),
-        sodiumMg: (analysisData['sodium'] ?? 0).toDouble(),
-        cholesterolMg: (analysisData['cholesterol'] ?? 0).toDouble(),
-        sugarGrams: (analysisData['sugar'] ?? 0).toDouble(),
-        saturatedFatGrams: (analysisData['saturatedFat'] ?? 0).toDouble(),
-        transFatGrams: (analysisData['transFat'] ?? 0).toDouble(),
-        potassiumMg: (analysisData['potassium'] ?? 0).toDouble(),
-        glycemicIndex:
-            (analysisData['glycemicIndex'] ?? analysisData['gi'] ?? 0).toInt(),
-        glycemicLoad: (analysisData['glycemicLoad'] ?? 0).toInt(),
-        servingSize: (analysisData['servingSizeGrams'] ?? 100).toDouble(),
-        servingUnit: 'g',
-        confidence: (analysisData['confidence'] ?? 0.8).toDouble(),
-        aiExplanation: analysisData['healthNotes'] ?? '',
-        healthFlags: List<String>.from(analysisData['warnings'] ?? []),
-        ironMg: (analysisData['iron'] ?? 0).toDouble(),
-        calciumMg: (analysisData['calcium'] ?? 0).toDouble(),
-        vitaminAPercent: (analysisData['vitaminA'] ?? 0).toDouble(),
-        vitaminCPercent: (analysisData['vitaminC'] ?? 0).toDouble(),
-        healthScore: (analysisData['healthScore'] ?? 5.0).toDouble(),
-      );
+      // Check if response contains multiple items
+      if (analysisData.containsKey('items') && analysisData['items'] is List) {
+        final items = analysisData['items'] as List;
+        final subItems = items.map((item) {
+          final itemData = Map<String, dynamic>.from(item as Map);
+          return _createFoodItemFromData(itemData);
+        }).toList();
 
-      return [foodItem];
+        // Create combined meal entry
+        return _createCombinedMealEntry(
+          subItems,
+          analysisData,
+          imagePath: imagePath,
+        );
+      }
+
+      // Fallback: Single item response (backward compatibility)
+      return _createFoodItemFromData(analysisData, imagePath: imagePath);
     } on FirebaseFunctionsException catch (e) {
       debugPrint(
         '[AIService] FirebaseFunctionsException: ${e.code} - ${e.message}',
@@ -102,7 +89,7 @@ class AIService {
   }
 
   /// Analyze food from text description
-  Future<List<FoodItem>> analyzeFoodText(String description) async {
+  Future<FoodItem> analyzeFoodText(String description) async {
     _checkAuth();
 
     try {
@@ -125,36 +112,20 @@ class AIService {
 
       final analysisData = Map<String, dynamic>.from(data['data'] as Map);
 
-      final foodItem = FoodItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: analysisData['foodName'] ?? description,
-        calories: (analysisData['calories'] ?? 0).toDouble(),
-        protein: (analysisData['protein'] ?? 0).toDouble(),
-        carbs: (analysisData['carbohydrates'] ?? 0).toDouble(),
-        fat: (analysisData['fat'] ?? 0).toDouble(),
-        fiber: (analysisData['fiber'] ?? 0).toDouble(),
-        sodiumMg: (analysisData['sodium'] ?? 0).toDouble(),
-        cholesterolMg: (analysisData['cholesterol'] ?? 0).toDouble(),
-        sugarGrams: (analysisData['sugar'] ?? 0).toDouble(),
-        saturatedFatGrams: (analysisData['saturatedFat'] ?? 0).toDouble(),
-        transFatGrams: (analysisData['transFat'] ?? 0).toDouble(),
-        potassiumMg: (analysisData['potassium'] ?? 0).toDouble(),
-        glycemicIndex:
-            (analysisData['glycemicIndex'] ?? analysisData['gi'] ?? 0).toInt(),
-        glycemicLoad: (analysisData['glycemicLoad'] ?? 0).toInt(),
-        servingSize: (analysisData['servingSizeGrams'] ?? 100).toDouble(),
-        servingUnit: 'g',
-        confidence: (analysisData['confidence'] ?? 0.8).toDouble(),
-        aiExplanation: analysisData['healthNotes'] ?? '',
-        healthFlags: List<String>.from(analysisData['warnings'] ?? []),
-        ironMg: (analysisData['iron'] ?? 0).toDouble(),
-        calciumMg: (analysisData['calcium'] ?? 0).toDouble(),
-        vitaminAPercent: (analysisData['vitaminA'] ?? 0).toDouble(),
-        vitaminCPercent: (analysisData['vitaminC'] ?? 0).toDouble(),
-        healthScore: (analysisData['healthScore'] ?? 5.0).toDouble(),
-      );
+      // Check if response contains multiple items
+      if (analysisData.containsKey('items') && analysisData['items'] is List) {
+        final items = analysisData['items'] as List;
+        final subItems = items.map((item) {
+          final itemData = Map<String, dynamic>.from(item as Map);
+          return _createFoodItemFromData(itemData);
+        }).toList();
 
-      return [foodItem];
+        // Create combined meal entry
+        return _createCombinedMealEntry(subItems, analysisData);
+      }
+
+      // Fallback: Single item response (backward compatibility)
+      return _createFoodItemFromData(analysisData);
     } on FirebaseFunctionsException catch (e) {
       debugPrint(
         '[AIService] FirebaseFunctionsException: ${e.code} - ${e.message}',
@@ -165,6 +136,183 @@ class AIService {
       debugPrint('[AIService] Error in analyzeFoodText: $e');
       throw Exception('Failed to analyze food: ${e.toString()}');
     }
+  }
+
+  /// Create a combined meal entry from multiple food items
+  FoodItem _createCombinedMealEntry(
+    List<FoodItem> subItems,
+    Map<String, dynamic> analysisData, {
+    String? imagePath,
+  }) {
+    // Generate combined name from all items
+    final itemNames = subItems.map((item) => item.name).toList();
+    final combinedName = itemNames.length > 3
+        ? '${itemNames.take(3).join(', ')} & more'
+        : itemNames.join(', ');
+
+    // Calculate totals from subItems
+    double totalCalories = 0;
+    double totalProtein = 0;
+    double totalCarbs = 0;
+    double totalFat = 0;
+    double totalFiber = 0;
+    double totalSodium = 0;
+    double totalCholesterol = 0;
+    double totalSugar = 0;
+    double totalSaturatedFat = 0;
+    double totalTransFat = 0;
+    double totalPotassium = 0;
+    double totalIron = 0;
+    double totalCalcium = 0;
+    double totalVitaminA = 0;
+    double totalVitaminC = 0;
+    double totalServingSize = 0;
+    double avgHealthScore = 0;
+    double minConfidence = 1.0;
+    List<String> allWarnings = [];
+
+    // For weighted GI/GL calculation
+    double weightedGISum = 0;
+    double totalGLSum = 0;
+    double carbsWithGI = 0;
+
+    for (final item in subItems) {
+      totalCalories += item.calories;
+      totalProtein += item.protein;
+      totalCarbs += item.carbs;
+      totalFat += item.fat;
+      totalFiber += item.fiber;
+      totalSodium += item.sodiumMg ?? 0;
+      totalCholesterol += item.cholesterolMg ?? 0;
+      totalSugar += item.sugarGrams ?? 0;
+      totalSaturatedFat += item.saturatedFatGrams ?? 0;
+      totalTransFat += item.transFatGrams ?? 0;
+      totalPotassium += item.potassiumMg ?? 0;
+      totalIron += item.ironMg ?? 0;
+      totalCalcium += item.calciumMg ?? 0;
+      totalVitaminA += item.vitaminAPercent ?? 0;
+      totalVitaminC += item.vitaminCPercent ?? 0;
+      totalServingSize += item.servingSize;
+      avgHealthScore += item.healthScore ?? 5.0;
+      if (item.confidence < minConfidence) {
+        minConfidence = item.confidence;
+      }
+      allWarnings.addAll(item.healthFlags);
+
+      // Calculate weighted GI (weighted by carb content)
+      if (item.glycemicIndex != null &&
+          item.glycemicIndex! > 0 &&
+          item.carbs > 0) {
+        weightedGISum += item.glycemicIndex! * item.carbs;
+        carbsWithGI += item.carbs;
+      }
+
+      // Sum GL values directly (GL is additive for a meal)
+      if (item.glycemicLoad != null && item.glycemicLoad! > 0) {
+        totalGLSum += item.glycemicLoad!;
+      }
+    }
+
+    avgHealthScore = avgHealthScore / subItems.length;
+
+    // Calculate weighted average GI (only if we have valid data)
+    int? combinedGI;
+    if (carbsWithGI > 0) {
+      combinedGI = (weightedGISum / carbsWithGI).round();
+    }
+
+    // Total GL for the meal
+    int? combinedGL = totalGLSum > 0 ? totalGLSum.round() : null;
+
+    // Get meal summary from AI response, or generate a basic one
+    String mealSummary = analysisData['mealSummary'] as String? ?? '';
+    if (mealSummary.isEmpty) {
+      // Generate a basic summary if AI didn't provide one
+      final itemList = itemNames.join(', ');
+      final proteinPercent = ((totalProtein * 4 / totalCalories) * 100).round();
+      final carbsPercent = ((totalCarbs * 4 / totalCalories) * 100).round();
+      final fatPercent = ((totalFat * 9 / totalCalories) * 100).round();
+
+      mealSummary =
+          'This meal contains $itemList, providing ${totalCalories.round()} calories with a macro distribution of $proteinPercent% protein, $carbsPercent% carbs, and $fatPercent% fat. ';
+
+      if (avgHealthScore >= 7) {
+        mealSummary += 'Overall, this is a nutritious meal with good balance.';
+      } else if (avgHealthScore >= 5) {
+        mealSummary += 'This meal provides moderate nutritional value.';
+      } else {
+        mealSummary +=
+            'Consider adding more vegetables or protein for better nutrition.';
+      }
+    }
+
+    return FoodItem(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: combinedName,
+      calories: totalCalories,
+      protein: totalProtein,
+      carbs: totalCarbs,
+      fat: totalFat,
+      fiber: totalFiber,
+      sodiumMg: totalSodium,
+      cholesterolMg: totalCholesterol,
+      sugarGrams: totalSugar,
+      saturatedFatGrams: totalSaturatedFat,
+      transFatGrams: totalTransFat,
+      potassiumMg: totalPotassium,
+      glycemicIndex: combinedGI,
+      glycemicLoad: combinedGL,
+      servingSize: totalServingSize,
+      servingUnit: 'g',
+      confidence: minConfidence,
+      imagePath: imagePath,
+      aiExplanation: mealSummary,
+      healthFlags: allWarnings.toSet().toList(), // Remove duplicates
+      ironMg: totalIron,
+      calciumMg: totalCalcium,
+      vitaminAPercent: totalVitaminA,
+      vitaminCPercent: totalVitaminC,
+      healthScore: avgHealthScore,
+      subItems: subItems,
+    );
+  }
+
+  /// Helper method to create FoodItem from analysis data
+  FoodItem _createFoodItemFromData(
+    Map<String, dynamic> analysisData, {
+    String? imagePath,
+  }) {
+    return FoodItem(
+      id:
+          DateTime.now().millisecondsSinceEpoch.toString() +
+          '_${analysisData['foodName']?.toString().hashCode ?? 0}',
+      name: analysisData['foodName'] ?? 'Unknown Food',
+      calories: (analysisData['calories'] ?? 0).toDouble(),
+      protein: (analysisData['protein'] ?? 0).toDouble(),
+      carbs: (analysisData['carbohydrates'] ?? 0).toDouble(),
+      fat: (analysisData['fat'] ?? 0).toDouble(),
+      fiber: (analysisData['fiber'] ?? 0).toDouble(),
+      sodiumMg: (analysisData['sodium'] ?? 0).toDouble(),
+      cholesterolMg: (analysisData['cholesterol'] ?? 0).toDouble(),
+      sugarGrams: (analysisData['sugar'] ?? 0).toDouble(),
+      saturatedFatGrams: (analysisData['saturatedFat'] ?? 0).toDouble(),
+      transFatGrams: (analysisData['transFat'] ?? 0).toDouble(),
+      potassiumMg: (analysisData['potassium'] ?? 0).toDouble(),
+      glycemicIndex: (analysisData['glycemicIndex'] ?? analysisData['gi'] ?? 0)
+          .toInt(),
+      glycemicLoad: (analysisData['glycemicLoad'] ?? 0).toInt(),
+      servingSize: (analysisData['servingSizeGrams'] ?? 100).toDouble(),
+      servingUnit: 'g',
+      confidence: (analysisData['confidence'] ?? 0.8).toDouble(),
+      imagePath: imagePath,
+      aiExplanation: analysisData['healthNotes'] ?? '',
+      healthFlags: List<String>.from(analysisData['warnings'] ?? []),
+      ironMg: (analysisData['iron'] ?? 0).toDouble(),
+      calciumMg: (analysisData['calcium'] ?? 0).toDouble(),
+      vitaminAPercent: (analysisData['vitaminA'] ?? 0).toDouble(),
+      vitaminCPercent: (analysisData['vitaminC'] ?? 0).toDouble(),
+      healthScore: (analysisData['healthScore'] ?? 5.0).toDouble(),
+    );
   }
 
   /// Chat with AI nutrition assistant

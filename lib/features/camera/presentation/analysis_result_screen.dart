@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,9 +27,10 @@ class AnalysisResultScreen extends ConsumerStatefulWidget {
 
 class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
   bool _isAnalyzing = true;
-  List<FoodItem> _detectedFoods = [];
+  FoodItem? _detectedFood;
   String? _error;
   MealType _selectedMealType = MealType.lunch;
+  bool _hasLoggedFood = false;
 
   @override
   void initState() {
@@ -61,12 +63,18 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
 
     try {
       final aiService = ref.read(aiServiceProvider);
-      final foods = await aiService.analyzeFoodImage(widget.imagePath!);
+      final food = await aiService.analyzeFoodImage(widget.imagePath!);
+
+      // Add image path to food item
+      final foodWithImage = food.copyWith(imagePath: widget.imagePath);
 
       setState(() {
-        _detectedFoods = foods;
+        _detectedFood = foodWithImage;
         _isAnalyzing = false;
       });
+
+      // Immediately save to Firestore in the background after analysis completes
+      _saveToFirestoreInBackground(foodWithImage);
     } catch (e) {
       setState(() {
         _isAnalyzing = false;
@@ -75,54 +83,112 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
     }
   }
 
-  Future<void> _logFood() async {
-    if (_detectedFoods.isEmpty) return;
+  /// Save food to Firestore immediately in background (non-blocking)
+  Future<void> _saveToFirestoreInBackground(FoodItem food) async {
+    if (_hasLoggedFood) return; // Already saved
+    try {
+      await ref
+          .read(foodLogProvider.notifier)
+          .addFoodToMeal(_selectedMealType, food);
+      _hasLoggedFood = true;
+    } catch (e) {
+      // Silently fail - will retry when user clicks log button
+      debugPrint('Background save failed: $e');
+    }
+  }
 
-    await ref
-        .read(foodLogProvider.notifier)
-        .addMultipleFoodsToMeal(_selectedMealType, _detectedFoods);
+  void _navigateToFoodDetail() {
+    if (_detectedFood == null) return;
 
+    // If background save failed, try one more time (non-blocking)
+    if (!_hasLoggedFood) {
+      _saveToFirestoreInBackground(_detectedFood!);
+    }
+
+    final itemCount = _detectedFood!.subItems?.length ?? 1;
+
+    // Show success and navigate immediately
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Added ${_detectedFoods.length} item(s) to ${_selectedMealType.displayName}!',
+            'Added meal with $itemCount item(s) to ${_selectedMealType.displayName}!',
           ),
           backgroundColor: AppColors.success,
         ),
       );
 
-      // Navigate to food detail page for the first logged food
-      final food = _detectedFoods.first;
+      // Navigate to food detail page for the logged food
       context.pop();
       context.push(
-        '${AppRoutes.foodDetail}/${food.id}',
-        extra: {'food': food, 'mealType': _selectedMealType},
+        '${AppRoutes.foodDetail}/${_detectedFood!.id}',
+        extra: {
+          'food': _detectedFood,
+          'mealType': _selectedMealType,
+          'imagePath': widget.imagePath,
+        },
       );
     }
   }
 
-  void _removeFood(int index) {
-    setState(() {
-      _detectedFoods.removeAt(index);
-    });
+  void _handleBackNavigation() {
+    if (_detectedFood == null || _error != null) {
+      context.pop();
+      return;
+    }
+
+    // If background save failed, try one more time (non-blocking)
+    if (!_hasLoggedFood) {
+      _saveToFirestoreInBackground(_detectedFood!);
+    }
+
+    final itemCount = _detectedFood!.subItems?.length ?? 1;
+
+    // Foods already saved in background, just navigate to detail
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Saved meal with $itemCount item(s) to ${_selectedMealType.displayName}!',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+
+      context.pop();
+      context.push(
+        '${AppRoutes.foodDetail}/${_detectedFood!.id}',
+        extra: {
+          'food': _detectedFood,
+          'mealType': _selectedMealType,
+          'imagePath': widget.imagePath,
+        },
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analysis Result'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        _handleBackNavigation();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Analysis Result'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _handleBackNavigation,
+          ),
         ),
+        body: _isAnalyzing
+            ? _buildLoadingView()
+            : _error != null
+            ? _buildErrorView()
+            : _buildResultView(),
       ),
-      body: _isAnalyzing
-          ? _buildLoadingView()
-          : _error != null
-          ? _buildErrorView()
-          : _buildResultView(),
     );
   }
 
@@ -212,22 +278,17 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
   }
 
   Widget _buildResultView() {
-    final totalCalories = _detectedFoods.fold<double>(
-      0,
-      (sum, food) => sum + food.calories,
-    );
-    final totalProtein = _detectedFoods.fold<double>(
-      0,
-      (sum, food) => sum + food.protein,
-    );
-    final totalCarbs = _detectedFoods.fold<double>(
-      0,
-      (sum, food) => sum + food.carbs,
-    );
-    final totalFat = _detectedFoods.fold<double>(
-      0,
-      (sum, food) => sum + food.fat,
-    );
+    if (_detectedFood == null) {
+      return const EmptyState(
+        title: 'No food detected',
+        subtitle: 'Try taking another photo or add food manually',
+        icon: Icons.search_off,
+      );
+    }
+
+    final food = _detectedFood!;
+    final subItems = food.subItems ?? [];
+    final itemCount = subItems.isNotEmpty ? subItems.length : 1;
 
     return Column(
       children: [
@@ -249,6 +310,18 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                 ),
               const SizedBox(height: 20),
 
+              // Combined meal name
+              Text(
+                food.name,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+
               // Summary card
               Card(
                 child: Padding(
@@ -256,7 +329,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                   child: Column(
                     children: [
                       Text(
-                        '${totalCalories.toInt()} kcal',
+                        '${food.calories.toInt()} kcal',
                         style: const TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
@@ -269,17 +342,17 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                         children: [
                           _MacroSummary(
                             label: 'Protein',
-                            value: totalProtein,
+                            value: food.protein,
                             color: AppColors.protein,
                           ),
                           _MacroSummary(
                             label: 'Carbs',
-                            value: totalCarbs,
+                            value: food.carbs,
                             color: AppColors.carbs,
                           ),
                           _MacroSummary(
                             label: 'Fat',
-                            value: totalFat,
+                            value: food.fat,
                             color: AppColors.fat,
                           ),
                         ],
@@ -343,71 +416,126 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Detected foods
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Detected Items (${_detectedFoods.length})',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+              // Individual items breakdown (if multiple items)
+              if (subItems.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Individual Items ($itemCount)',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {
-                      context.pop();
-                      context.push(AppRoutes.camera);
-                    },
-                    icon: const Icon(Icons.camera_alt, size: 18),
-                    label: const Text('Take Again'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              if (_detectedFoods.isEmpty)
-                const EmptyState(
-                  title: 'No food detected',
-                  subtitle: 'Try taking another photo or add food manually',
-                  icon: Icons.search_off,
-                )
-              else
-                ...List.generate(_detectedFoods.length, (index) {
-                  final food = _detectedFoods[index];
-                  return FoodItemCard(
-                    food: food,
-                    showConfidence: true,
-                    showHealthFlags: true,
-                    onDelete: () => _removeFood(index),
-                  );
-                }),
+                    TextButton.icon(
+                      onPressed: () {
+                        context.pop();
+                        context.push(AppRoutes.camera);
+                      },
+                      icon: const Icon(Icons.camera_alt, size: 18),
+                      label: const Text('Take Again'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...subItems.map((item) => _buildSubItemCard(item)),
+              ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        context.pop();
+                        context.push(AppRoutes.camera);
+                      },
+                      icon: const Icon(Icons.camera_alt, size: 18),
+                      label: const Text('Take Again'),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
 
         // Bottom action
-        if (_detectedFoods.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: PrimaryButton(
+              text: 'Log Meal ($itemCount item${itemCount > 1 ? 's' : ''})',
+              onPressed: _navigateToFoodDetail,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubItemCard(FoodItem item) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${item.servingSize.toInt()}${item.servingUnit}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${item.calories.toInt()} kcal',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.calories,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'P:${item.protein.toInt()}g  C:${item.carbs.toInt()}g  F:${item.fat.toInt()}g',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
-            child: SafeArea(
-              child: PrimaryButton(
-                text: 'Log ${_detectedFoods.length} Item(s)',
-                onPressed: _logFood,
-              ),
-            ),
-          ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 }

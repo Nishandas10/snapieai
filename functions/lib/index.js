@@ -80,49 +80,85 @@ exports.analyzeFood = (0, https_1.onCall)(async (request) => {
                 messages: [
                     {
                         role: "system",
-                        content: `You are an expert nutritionist and food analyst. Analyze the food description and provide detailed nutritional information.
-          
+                        content: `You are an expert nutritionist and food analyst. Analyze the food description and provide detailed nutritional information for EACH individual food item mentioned.
+
+IMPORTANT: If the user describes multiple food items (e.g., "roti, rice, chicken and eggs"), you MUST return nutritional information for EACH item separately.
+
+CRITICAL PORTION ESTIMATION RULES:
+- NEVER default to 100g for serving sizes
+- Estimate REALISTIC portion sizes based on typical serving amounts:
+  * 1 roti/chapati = ~30-40g
+  * 1 cup cooked rice = ~150-180g
+  * 1 egg = ~50g
+  * 1 slice bread = ~25-30g
+  * 1 medium banana = ~120g
+  * 1 cup dal/curry = ~200-250ml
+  * 1 piece chicken breast = ~150-200g
+  * 1 samosa = ~80-100g
+  * 1 idli = ~40g
+  * 1 dosa = ~100-120g
+- If user specifies quantity (e.g., "2 rotis"), calculate for that exact amount
+- If user mentions "small/medium/large", adjust portions accordingly
+- Calculate nutritional values based on the ESTIMATED portion, not per 100g
+
 Return your response as a valid JSON object with this exact structure:
 {
-  "foodName": "Name of the food/dish",
-  "description": "Brief description of the food",
-  "servingSize": "Estimated serving size (e.g., '1 cup', '150g')",
-  "servingSizeGrams": 150,
-  "calories": 250,
-  "protein": 12.5,
-  "carbohydrates": 30.0,
-  "fat": 8.5,
-  "fiber": 3.0,
-  "sugar": 5.0,
-  "sodium": 400,
-  "saturatedFat": 2.5,
-  "transFat": 0,
-  "cholesterol": 25,
-  "potassium": 300,
-  "vitaminA": 10,
-  "vitaminC": 15,
-  "calcium": 8,
-  "iron": 12,
-  "glycemicIndex": 55,
-  "glycemicLoad": 10,
-  "ingredients": ["ingredient1", "ingredient2"],
-  "healthScore": 7.5,
-  "healthNotes": "Brief health assessment",
-  "warnings": ["Any dietary warnings or allergens"],
-  "confidence": 0.85
+  "items": [
+    {
+      "foodName": "Name of the individual food item",
+      "description": "Brief description",
+      "servingSize": "Estimated serving size (e.g., '1 piece', '2 rotis')",
+      "servingSizeGrams": 80,
+      "calories": 150,
+      "protein": 8.0,
+      "carbohydrates": 20.0,
+      "fat": 5.0,
+      "fiber": 2.0,
+      "sugar": 1.0,
+      "sodium": 200,
+      "saturatedFat": 1.5,
+      "transFat": 0,
+      "cholesterol": 15,
+      "potassium": 150,
+      "vitaminA": 5,
+      "vitaminC": 2,
+      "calcium": 4,
+      "iron": 6,
+      "glycemicIndex": 55,
+      "glycemicLoad": 8,
+      "healthScore": 7.0,
+      "healthNotes": "Brief health note for this item",
+      "warnings": [],
+      "confidence": 0.85
+    }
+  ],
+  "totals": {
+    "calories": 500,
+    "protein": 25.0,
+    "carbohydrates": 60.0,
+    "fat": 15.0,
+    "fiber": 6.0,
+    "sugar": 3.0
+  },
+  "mealSummary": "A comprehensive 2-3 sentence nutritional analysis of the entire meal. Include: overall nutritional balance, key health benefits, any concerns (high sodium, sugar, etc.), and how it fits into a healthy diet. Be specific about the macro distribution and notable micronutrients."
 }
 
-All numeric values should be numbers (not strings). Percentages for vitamins/minerals are daily value percentages.
-glycemicIndex should be a number from 0-100 indicating how quickly the food raises blood sugar.
-glycemicLoad takes into account portion size (low: 0-10, medium: 11-19, high: 20+).
-Be as accurate as possible with nutritional estimates based on typical serving sizes.`,
+Rules:
+- Each individual food item gets its own entry in the "items" array
+- "totals" contains the sum of all items
+- "mealSummary" MUST be a detailed 2-3 sentence nutritional analysis of the ENTIRE meal combined
+- All numeric values should be numbers (not strings)
+- glycemicIndex: 0-100 scale
+- glycemicLoad: low 0-10, medium 11-19, high 20+
+- servingSizeGrams MUST reflect realistic portion sizes, NOT 100g default
+- Calculate all nutritional values for the actual estimated portion`,
                     },
                     {
                         role: "user",
-                        content: `Analyze this food and provide nutritional information: ${userContext}`,
+                        content: `Analyze this food and provide nutritional information for each item with ACCURATE portion estimates: ${userContext}`,
                     },
                 ],
-                max_tokens: 1000,
+                max_tokens: 2000,
                 temperature: 0.3,
             });
         }
@@ -133,42 +169,75 @@ Be as accurate as possible with nutritional estimates based on typical serving s
                 messages: [
                     {
                         role: "system",
-                        content: `You are an expert nutritionist and food analyst. Analyze the food in the image and provide detailed nutritional information.
-          
+                        content: `You are an expert nutritionist and food analyst. Analyze the food in the image and provide detailed nutritional information for EACH individual food item visible.
+
+IMPORTANT: If you see multiple food items in the image (e.g., rice, curry, bread, vegetables), you MUST return nutritional information for EACH item separately.
+
+CRITICAL PORTION ESTIMATION RULES:
+- NEVER default to 100g for serving sizes
+- Visually estimate the ACTUAL portion size shown in the image
+- Use visual cues like plate size, utensils, or other objects for scale
+- Typical portion references:
+  * A palm-sized portion of meat = ~100-150g
+  * A fist-sized portion of rice = ~150g
+  * A cup of curry/dal visible = ~200-250ml
+  * Standard dinner plate = ~25-27cm diameter
+  * A heap of rice on plate = ~200-300g
+  * Single roti/chapati = ~30-40g each
+- If portion looks small, estimate lower; if it looks generous, estimate higher
+- Calculate nutritional values based on the ESTIMATED portion, not per 100g
+
 Return your response as a valid JSON object with this exact structure:
 {
-  "foodName": "Name of the food/dish",
-  "description": "Brief description of the food",
-  "servingSize": "Estimated serving size (e.g., '1 cup', '150g')",
-  "servingSizeGrams": 150,
-  "calories": 250,
-  "protein": 12.5,
-  "carbohydrates": 30.0,
-  "fat": 8.5,
-  "fiber": 3.0,
-  "sugar": 5.0,
-  "sodium": 400,
-  "saturatedFat": 2.5,
-  "transFat": 0,
-  "cholesterol": 25,
-  "potassium": 300,
-  "vitaminA": 10,
-  "vitaminC": 15,
-  "calcium": 8,
-  "iron": 12,
-  "glycemicIndex": 55,
-  "glycemicLoad": 10,
-  "ingredients": ["ingredient1", "ingredient2"],
-  "healthScore": 7.5,
-  "healthNotes": "Brief health assessment",
-  "warnings": ["Any dietary warnings or allergens"],
-  "confidence": 0.85
+  "items": [
+    {
+      "foodName": "Name of the individual food item",
+      "description": "Brief description",
+      "servingSize": "Estimated serving size (e.g., '1 cup', '150g')",
+      "servingSizeGrams": 150,
+      "calories": 150,
+      "protein": 8.0,
+      "carbohydrates": 20.0,
+      "fat": 5.0,
+      "fiber": 2.0,
+      "sugar": 1.0,
+      "sodium": 200,
+      "saturatedFat": 1.5,
+      "transFat": 0,
+      "cholesterol": 15,
+      "potassium": 150,
+      "vitaminA": 5,
+      "vitaminC": 2,
+      "calcium": 4,
+      "iron": 6,
+      "glycemicIndex": 55,
+      "glycemicLoad": 8,
+      "healthScore": 7.0,
+      "healthNotes": "Brief health note for this item",
+      "warnings": [],
+      "confidence": 0.85
+    }
+  ],
+  "totals": {
+    "calories": 500,
+    "protein": 25.0,
+    "carbohydrates": 60.0,
+    "fat": 15.0,
+    "fiber": 6.0,
+    "sugar": 3.0
+  },
+  "mealSummary": "A comprehensive 2-3 sentence nutritional analysis of the entire meal. Include: overall nutritional balance, key health benefits, any concerns (high sodium, sugar, etc.), and how it fits into a healthy diet. Be specific about the macro distribution and notable micronutrients."
 }
 
-All numeric values should be numbers (not strings). Percentages for vitamins/minerals are daily value percentages.
-glycemicIndex should be a number from 0-100 indicating how quickly the food raises blood sugar.
-glycemicLoad takes into account portion size (low: 0-10, medium: 11-19, high: 20+).
-If you cannot identify the food, still return the JSON structure with reasonable estimates and lower confidence.`,
+Rules:
+- Each individual food item visible gets its own entry in the "items" array
+- "totals" contains the sum of all items
+- "mealSummary" MUST be a detailed 2-3 sentence nutritional analysis of the ENTIRE meal combined
+- All numeric values should be numbers (not strings)
+- glycemicIndex: 0-100 scale
+- glycemicLoad: low 0-10, medium 11-19, high 20+
+- servingSizeGrams MUST reflect visually estimated portion sizes, NOT 100g default
+- If you cannot identify a food, still include it with reasonable estimates and lower confidence`,
                     },
                     {
                         role: "user",
@@ -182,13 +251,13 @@ If you cannot identify the food, still return the JSON structure with reasonable
                             {
                                 type: "text",
                                 text: userContext
-                                    ? `Analyze this food. Additional context: ${userContext}`
-                                    : "Analyze this food and provide nutritional information.",
+                                    ? `Analyze this food image. Additional context: ${userContext}. Identify and provide nutrition for each individual food item.`
+                                    : "Analyze this food image and provide nutritional information for each individual food item visible.",
                             },
                         ],
                     },
                 ],
-                max_tokens: 1000,
+                max_tokens: 2000,
                 temperature: 0.3,
             });
         }
