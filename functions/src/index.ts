@@ -10,285 +10,139 @@ dotenv.config();
 initializeApp();
 const db = getFirestore();
 
-// Initialize OpenAI
+// Initialize OpenAI with optimized settings for faster responses
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  maxRetries: 1, // Reduce retries for faster failure
+  timeout: 15000, // 15s timeout to fail fast
 });
 
 // ========================================
-// FOOD ANALYSIS FUNCTION
+// FOOD ANALYSIS FUNCTION (OPTIMIZED)
 // ========================================
-export const analyzeFood = onCall(async (request) => {
-  // Log for debugging
-  console.log("analyzeFood called");
-  console.log("request.auth:", JSON.stringify(request.auth));
+export const analyzeFood = onCall(
+  {
+    memory: "512MiB", // More memory for faster processing
+    timeoutSeconds: 30, // Shorter timeout
+    minInstances: 1, // Keep 1 warm instance to avoid cold starts
+    concurrency: 10, // Handle multiple requests per instance
+  },
+  async (request) => {
+    // Verify authentication
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "User must be authenticated to use this function",
+      );
+    }
 
-  // Verify authentication
-  if (!request.auth) {
-    console.log("Rejecting unauthenticated request");
-    throw new HttpsError(
-      "unauthenticated",
-      "User must be authenticated to use this function"
-    );
-  }
+    const { imageBase64, mimeType, userContext } = request.data as {
+      imageBase64?: string;
+      mimeType?: string;
+      userContext?: string;
+    };
 
-  console.log("User authenticated with UID:", request.auth.uid);
+    // Allow text-based analysis without image
+    const isTextOnly = !imageBase64 || imageBase64 === "";
 
-  const { imageBase64, mimeType, userContext } = request.data as {
-    imageBase64?: string;
-    mimeType?: string;
-    userContext?: string;
-  };
+    try {
+      let response;
 
-  console.log(
-    "Request data - imageBase64 length:",
-    imageBase64?.length || 0,
-    "userContext:",
-    userContext
-  );
+      // Optimized compact prompt with all required nutrients
+      const COMPACT_SYSTEM_PROMPT = `Expert nutritionist. Return ONLY valid JSON, no markdown.
+{"items":[{"foodName":"","description":"","servingSize":"","servingSizeGrams":0,"calories":0,"protein":0,"carbohydrates":0,"fat":0,"fiber":0,"sugar":0,"sodium":0,"saturatedFat":0,"transFat":0,"cholesterol":0,"potassium":0,"vitaminA":0,"vitaminC":0,"calcium":0,"iron":0,"glycemicIndex":0,"glycemicLoad":0,"healthScore":0,"healthNotes":"","warnings":[],"confidence":0.9}],"totals":{"calories":0,"protein":0,"carbohydrates":0,"fat":0,"fiber":0,"sugar":0},"mealSummary":""}
+Rules: Realistic portions (roti=35g,rice cup=160g,egg=50g). Each food separate. All numbers (no strings). healthScore 0-10. glycemicIndex 0-100. glycemicLoad=GI*carbs/100. Vitamins/minerals as %DV.`;
 
-  // Allow text-based analysis without image
-  const isTextOnly = !imageBase64 || imageBase64 === "";
+      if (isTextOnly) {
+        // Text-based food analysis
+        if (!userContext) {
+          throw new HttpsError(
+            "invalid-argument",
+            "Either image data or food description is required",
+          );
+        }
 
-  try {
-    let response;
-
-    if (isTextOnly) {
-      // Text-based food analysis
-      if (!userContext) {
-        throw new HttpsError(
-          "invalid-argument",
-          "Either image data or food description is required"
-        );
+        response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: COMPACT_SYSTEM_PROMPT },
+            { role: "user", content: `Analyze: ${userContext}` },
+          ],
+          max_tokens: 2000,
+          temperature: 0.1,
+        });
+      } else {
+        // Image-based food analysis - use low detail for speed
+        response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: COMPACT_SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}`,
+                    detail: "low", // LOW detail = much faster processing!
+                  },
+                },
+                {
+                  type: "text",
+                  text: userContext
+                    ? `Analyze food. Context: ${userContext}`
+                    : "Analyze food in image.",
+                },
+              ],
+            },
+          ],
+          max_tokens: 2000,
+          temperature: 0.1,
+        });
       }
 
-      response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No response from AI");
+      }
+
+      // Parse JSON from response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("Could not parse AI response");
+      }
+
+      const analysisResult = JSON.parse(jsonMatch[0]);
+
+      // Fire-and-forget analytics update (don't await)
+      db.collection("users")
+        .doc(request.auth.uid)
+        .collection("analytics")
+        .doc("usage")
+        .set(
           {
-            role: "system",
-            content: `You are an expert nutritionist and food analyst. Analyze the food description and provide detailed nutritional information for EACH individual food item mentioned.
-
-IMPORTANT: If the user describes multiple food items (e.g., "roti, rice, chicken and eggs"), you MUST return nutritional information for EACH item separately.
-
-CRITICAL PORTION ESTIMATION RULES:
-- NEVER default to 100g for serving sizes
-- Estimate REALISTIC portion sizes based on typical serving amounts:
-  * 1 roti/chapati = ~30-40g
-  * 1 cup cooked rice = ~150-180g
-  * 1 egg = ~50g
-  * 1 slice bread = ~25-30g
-  * 1 medium banana = ~120g
-  * 1 cup dal/curry = ~200-250ml
-  * 1 piece chicken breast = ~150-200g
-  * 1 samosa = ~80-100g
-  * 1 idli = ~40g
-  * 1 dosa = ~100-120g
-- If user specifies quantity (e.g., "2 rotis"), calculate for that exact amount
-- If user mentions "small/medium/large", adjust portions accordingly
-- Calculate nutritional values based on the ESTIMATED portion, not per 100g
-
-Return your response as a valid JSON object with this exact structure:
-{
-  "items": [
-    {
-      "foodName": "Name of the individual food item",
-      "description": "Brief description",
-      "servingSize": "Estimated serving size (e.g., '1 piece', '2 rotis')",
-      "servingSizeGrams": 80,
-      "calories": 150,
-      "protein": 8.0,
-      "carbohydrates": 20.0,
-      "fat": 5.0,
-      "fiber": 2.0,
-      "sugar": 1.0,
-      "sodium": 200,
-      "saturatedFat": 1.5,
-      "transFat": 0,
-      "cholesterol": 15,
-      "potassium": 150,
-      "vitaminA": 5,
-      "vitaminC": 2,
-      "calcium": 4,
-      "iron": 6,
-      "glycemicIndex": 55,
-      "glycemicLoad": 8,
-      "healthScore": 7.0,
-      "healthNotes": "Brief health note for this item",
-      "warnings": [],
-      "confidence": 0.85
-    }
-  ],
-  "totals": {
-    "calories": 500,
-    "protein": 25.0,
-    "carbohydrates": 60.0,
-    "fat": 15.0,
-    "fiber": 6.0,
-    "sugar": 3.0
-  },
-  "mealSummary": "A comprehensive 2-3 sentence nutritional analysis of the entire meal. Include: overall nutritional balance, key health benefits, any concerns (high sodium, sugar, etc.), and how it fits into a healthy diet. Be specific about the macro distribution and notable micronutrients."
-}
-
-Rules:
-- Each individual food item gets its own entry in the "items" array
-- "totals" contains the sum of all items
-- "mealSummary" MUST be a detailed 2-3 sentence nutritional analysis of the ENTIRE meal combined
-- All numeric values should be numbers (not strings)
-- glycemicIndex: 0-100 scale
-- glycemicLoad: low 0-10, medium 11-19, high 20+
-- servingSizeGrams MUST reflect realistic portion sizes, NOT 100g default
-- Calculate all nutritional values for the actual estimated portion`,
+            totalScans: FieldValue.increment(1),
+            lastScanAt: FieldValue.serverTimestamp(),
           },
-          {
-            role: "user",
-            content: `Analyze this food and provide nutritional information for each item with ACCURATE portion estimates: ${userContext}`,
-          },
-        ],
-        max_tokens: 2000,
-        temperature: 0.3,
-      });
-    } else {
-      // Image-based food analysis
-      response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert nutritionist and food analyst. Analyze the food in the image and provide detailed nutritional information for EACH individual food item visible.
+          { merge: true },
+        )
+        .catch(() => {}); // Ignore analytics errors
 
-IMPORTANT: If you see multiple food items in the image (e.g., rice, curry, bread, vegetables), you MUST return nutritional information for EACH item separately.
-
-CRITICAL PORTION ESTIMATION RULES:
-- NEVER default to 100g for serving sizes
-- Visually estimate the ACTUAL portion size shown in the image
-- Use visual cues like plate size, utensils, or other objects for scale
-- Typical portion references:
-  * A palm-sized portion of meat = ~100-150g
-  * A fist-sized portion of rice = ~150g
-  * A cup of curry/dal visible = ~200-250ml
-  * Standard dinner plate = ~25-27cm diameter
-  * A heap of rice on plate = ~200-300g
-  * Single roti/chapati = ~30-40g each
-- If portion looks small, estimate lower; if it looks generous, estimate higher
-- Calculate nutritional values based on the ESTIMATED portion, not per 100g
-
-Return your response as a valid JSON object with this exact structure:
-{
-  "items": [
-    {
-      "foodName": "Name of the individual food item",
-      "description": "Brief description",
-      "servingSize": "Estimated serving size (e.g., '1 cup', '150g')",
-      "servingSizeGrams": 150,
-      "calories": 150,
-      "protein": 8.0,
-      "carbohydrates": 20.0,
-      "fat": 5.0,
-      "fiber": 2.0,
-      "sugar": 1.0,
-      "sodium": 200,
-      "saturatedFat": 1.5,
-      "transFat": 0,
-      "cholesterol": 15,
-      "potassium": 150,
-      "vitaminA": 5,
-      "vitaminC": 2,
-      "calcium": 4,
-      "iron": 6,
-      "glycemicIndex": 55,
-      "glycemicLoad": 8,
-      "healthScore": 7.0,
-      "healthNotes": "Brief health note for this item",
-      "warnings": [],
-      "confidence": 0.85
-    }
-  ],
-  "totals": {
-    "calories": 500,
-    "protein": 25.0,
-    "carbohydrates": 60.0,
-    "fat": 15.0,
-    "fiber": 6.0,
-    "sugar": 3.0
-  },
-  "mealSummary": "A comprehensive 2-3 sentence nutritional analysis of the entire meal. Include: overall nutritional balance, key health benefits, any concerns (high sodium, sugar, etc.), and how it fits into a healthy diet. Be specific about the macro distribution and notable micronutrients."
-}
-
-Rules:
-- Each individual food item visible gets its own entry in the "items" array
-- "totals" contains the sum of all items
-- "mealSummary" MUST be a detailed 2-3 sentence nutritional analysis of the ENTIRE meal combined
-- All numeric values should be numbers (not strings)
-- glycemicIndex: 0-100 scale
-- glycemicLoad: low 0-10, medium 11-19, high 20+
-- servingSizeGrams MUST reflect visually estimated portion sizes, NOT 100g default
-- If you cannot identify a food, still include it with reasonable estimates and lower confidence`,
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}`,
-                },
-              },
-              {
-                type: "text",
-                text: userContext
-                  ? `Analyze this food image. Additional context: ${userContext}. Identify and provide nutrition for each individual food item.`
-                  : "Analyze this food image and provide nutritional information for each individual food item visible.",
-              },
-            ],
-          },
-        ],
-        max_tokens: 2000,
-        temperature: 0.3,
-      });
-    }
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error("No response from AI");
-    }
-
-    // Parse JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Could not parse AI response");
-    }
-
-    const analysisResult = JSON.parse(jsonMatch[0]);
-
-    // Log usage for analytics
-    await db
-      .collection("users")
-      .doc(request.auth.uid)
-      .collection("analytics")
-      .doc("usage")
-      .set(
-        {
-          totalScans: FieldValue.increment(1),
-          lastScanAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
+      return {
+        success: true,
+        data: analysisResult,
+      };
+    } catch (error) {
+      console.error("Error analyzing food:", error);
+      throw new HttpsError(
+        "internal",
+        `Failed to analyze food: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       );
-
-    return {
-      success: true,
-      data: analysisResult,
-    };
-  } catch (error) {
-    console.error("Error analyzing food:", error);
-    throw new HttpsError(
-      "internal",
-      `Failed to analyze food: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`
-    );
-  }
-});
+    }
+  },
+);
 
 // ========================================
 // GENERATE MEAL PLAN FUNCTION
@@ -417,7 +271,7 @@ Return as valid JSON:
       "internal",
       `Failed to generate meal plan: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 });
@@ -524,7 +378,7 @@ Return as valid JSON:
       "internal",
       `Failed to generate recipe: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 });
@@ -712,7 +566,7 @@ FORMAT YOUR RESPONSES:
         {
           updatedAt: FieldValue.serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
 
       await sessionRef.collection("messages").add({
@@ -739,7 +593,7 @@ FORMAT YOUR RESPONSES:
           totalChatMessages: FieldValue.increment(1),
           lastChatAt: FieldValue.serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
 
     return {
@@ -752,7 +606,7 @@ FORMAT YOUR RESPONSES:
     console.error("Error in chat:", error);
     throw new HttpsError(
       "internal",
-      `Chat error: ${error instanceof Error ? error.message : "Unknown error"}`
+      `Chat error: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
 });
@@ -813,7 +667,7 @@ export const correctFoodAnalysis = onCall(async (request) => {
       "internal",
       `Failed to save correction: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 });
@@ -856,7 +710,7 @@ export const getDailySummary = onCall(async (request) => {
         fiber: acc.fiber + ((log.fiber as number) || 0),
         sugar: acc.sugar + ((log.sugar as number) || 0),
       }),
-      { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 }
+      { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 },
     );
 
     // Get user goals
@@ -897,7 +751,7 @@ export const getDailySummary = onCall(async (request) => {
       "internal",
       `Failed to get summary: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 });

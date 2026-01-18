@@ -295,23 +295,37 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
     final dateKey = log.dateKey;
     debugPrint('[FoodLogProvider] Saving log for $dateKey');
 
-    // Save to local storage
+    // Save to local storage FIRST (fast, synchronous-ish)
     await StorageService.saveFoodLog(dateKey, log.toJson());
     debugPrint('[FoodLogProvider] Saved to local storage');
 
+    // Update state IMMEDIATELY so UI shows result
     if (dateKey == _getDateKey(DateTime.now())) {
       state = state.copyWith(todayLog: log);
     } else {
       state = state.copyWith(logHistory: {...state.logHistory, dateKey: log});
     }
 
-    // Sync to Firestore if authenticated
+    // Sync to Firestore in BACKGROUND (non-blocking) - don't await!
     final user = FirebaseService.currentUser;
     debugPrint(
       '[FoodLogProvider] Current user for Firestore sync: ${user?.uid}',
     );
 
     if (user != null) {
+      // Fire-and-forget: sync to Firestore without blocking UI
+      _syncToFirestoreInBackground(user.uid, log, dateKey);
+    }
+  }
+
+  /// Background sync to Firestore - doesn't block UI
+  void _syncToFirestoreInBackground(
+    String userId,
+    DailyLog log,
+    String dateKey,
+  ) {
+    // Run async operations without awaiting
+    Future(() async {
       try {
         final mealsMap = <String, List<Map<String, dynamic>>>{};
         final totals = {
@@ -333,21 +347,24 @@ class FoodLogNotifier extends StateNotifier<DailyLogState> {
         debugPrint(
           '[FoodLogProvider] Syncing to Firestore: meals=${mealsMap.length}, totals=$totals',
         );
-        await FirebaseService.saveFoodLog(
-          userId: user.uid,
-          date: dateKey,
-          meals: mealsMap,
-          totals: totals,
-        );
-        debugPrint('[FoodLogProvider] Successfully synced to Firestore');
 
-        // Update streak after saving food log
-        await FirebaseService.updateStreak(user.uid);
+        // Run Firestore save and streak update in parallel
+        await Future.wait([
+          FirebaseService.saveFoodLog(
+            userId: userId,
+            date: dateKey,
+            meals: mealsMap,
+            totals: totals,
+          ),
+          FirebaseService.updateStreak(userId),
+        ]);
+
+        debugPrint('[FoodLogProvider] Successfully synced to Firestore');
         debugPrint('[FoodLogProvider] Streak updated');
       } catch (e) {
         debugPrint('[FoodLogProvider] Firestore sync failed: $e');
       }
-    }
+    });
   }
 
   /// Serialize a FoodItem to a Map for Firestore, including subItems

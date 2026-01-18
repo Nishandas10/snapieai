@@ -10,6 +10,12 @@ import '../models/meal_plan.dart';
 import '../models/recipe.dart';
 import '../models/user_profile.dart';
 
+/// Top-level function for compute isolate - encodes image to base64
+String _encodeImageToBase64(String imagePath) {
+  final bytes = File(imagePath).readAsBytesSync();
+  return base64Encode(bytes);
+}
+
 /// AI Service using Firebase Cloud Functions
 class AIService {
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
@@ -36,13 +42,13 @@ class AIService {
     _checkAuth();
 
     try {
-      final bytes = await File(imagePath).readAsBytes();
-      final base64Image = base64Encode(bytes);
+      // Read and encode image in isolate to avoid blocking UI
+      final base64Image = await compute(_encodeImageToBase64, imagePath);
 
       debugPrint('[AIService] Calling analyzeFood with image...');
       final callable = _functions.httpsCallable(
         'analyzeFood',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
       );
       debugPrint('[AIService] Making Cloud Function call...');
       final result = await callable.call({
@@ -96,7 +102,7 @@ class AIService {
       debugPrint('[AIService] Calling analyzeFood with text: $description');
       final callable = _functions.httpsCallable(
         'analyzeFood',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
       );
       debugPrint('[AIService] Making Cloud Function call...');
       final result = await callable.call({
