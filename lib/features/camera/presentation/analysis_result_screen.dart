@@ -210,24 +210,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
               ),
             ),
           const SizedBox(height: 32),
-          const CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Analyzing your food...',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'AI is detecting food items and\ncalculating nutrition',
-            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
+          const AnalysisStepLoader(isImageAnalysis: true),
         ],
       ),
     );

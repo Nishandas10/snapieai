@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/models/daily_log.dart';
+import '../../../core/services/storage_service.dart';
 
 enum AnalyticsPeriod { week, month, year }
 
@@ -87,7 +88,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   Widget _buildContent(user) {
     final targetCalories = user?.dailyCalorieTarget ?? 2000;
 
-    final stats = _calculateStats(_historicalLogs);
+    final stats = _calculateStats(_historicalLogs, targetCalories.toDouble());
 
     // Check if user has a weight goal (lose_fat or gain_muscle)
     final hasWeightGoal =
@@ -281,7 +282,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     );
   }
 
-  Map<String, dynamic> _calculateStats(List<DailyLog> logs) {
+  Map<String, dynamic> _calculateStats(
+    List<DailyLog> logs,
+    double targetCalories,
+  ) {
     if (logs.isEmpty) {
       return {
         'avgCalories': 0,
@@ -296,7 +300,6 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       };
     }
 
-    final targetCalories = 2000; // Default
     double totalCalories = 0;
     double totalProtein = 0;
     double totalCarbs = 0;
@@ -311,7 +314,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       totalFat += log.totalFat;
       totalFoods += log.totalFoodItems;
 
-      if ((log.totalCalories - targetCalories).abs() <= targetCalories * 0.1) {
+      // Count days where user reached their daily calorie goal
+      if (log.totalCalories >= targetCalories) {
         onTargetDays++;
       }
     }
@@ -1002,6 +1006,26 @@ class _WeightGoalProgressCard extends StatefulWidget {
 class _WeightGoalProgressCardState extends State<_WeightGoalProgressCard> {
   bool _isKg = true; // true = kg, false = lbs
 
+  static const String _weightUnitKey = 'weight_display_unit_is_kg';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnitPreference();
+  }
+
+  void _loadUnitPreference() {
+    final savedIsKg = StorageService.getBool(_weightUnitKey);
+    if (savedIsKg != null) {
+      setState(() => _isKg = savedIsKg);
+    }
+  }
+
+  void _setUnit(bool isKg) {
+    setState(() => _isKg = isKg);
+    StorageService.setBool(_weightUnitKey, isKg);
+  }
+
   double _toDisplayUnit(double kg) => _isKg ? kg : kg * 2.20462;
   String get _unit => _isKg ? 'kg' : 'lbs';
 
@@ -1099,7 +1123,7 @@ class _WeightGoalProgressCardState extends State<_WeightGoalProgressCard> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     GestureDetector(
-                      onTap: () => setState(() => _isKg = true),
+                      onTap: () => _setUnit(true),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -1124,7 +1148,7 @@ class _WeightGoalProgressCardState extends State<_WeightGoalProgressCard> {
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => setState(() => _isKg = false),
+                      onTap: () => _setUnit(false),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,

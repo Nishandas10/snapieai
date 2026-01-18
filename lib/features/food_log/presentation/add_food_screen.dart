@@ -161,7 +161,8 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
       ),
       body: LoadingOverlay(
         isLoading: _isLoading,
-        message: 'Analyzing food...',
+        useAnalysisLoader: true,
+        isImageAnalysis: false,
         child: Form(
           key: _formKey,
           child: ListView(
@@ -317,7 +318,7 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
                     );
                   },
                   icon: const Icon(Icons.camera_alt),
-                  label: const Text('Or scan with camera'),
+                  label: const Text('Scan with Camera'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: BorderSide(

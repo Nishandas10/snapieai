@@ -48,7 +48,7 @@ class AIService {
       debugPrint('[AIService] Calling analyzeFood with image...');
       final callable = _functions.httpsCallable(
         'analyzeFood',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
       );
       debugPrint('[AIService] Making Cloud Function call...');
       final result = await callable.call({
@@ -102,7 +102,7 @@ class AIService {
       debugPrint('[AIService] Calling analyzeFood with text: $description');
       final callable = _functions.httpsCallable(
         'analyzeFood',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
       );
       debugPrint('[AIService] Making Cloud Function call...');
       final result = await callable.call({

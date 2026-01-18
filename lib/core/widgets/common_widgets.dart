@@ -271,12 +271,16 @@ class LoadingOverlay extends StatelessWidget {
   final bool isLoading;
   final Widget child;
   final String? message;
+  final bool useAnalysisLoader;
+  final bool isImageAnalysis;
 
   const LoadingOverlay({
     super.key,
     required this.isLoading,
     required this.child,
     this.message,
+    this.useAnalysisLoader = false,
+    this.isImageAnalysis = false,
   });
 
   @override
@@ -294,26 +298,28 @@ class LoadingOverlay extends StatelessWidget {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.primary,
+                  child: useAnalysisLoader
+                      ? AnalysisStepLoader(isImageAnalysis: isImageAnalysis)
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.primary,
+                              ),
+                            ),
+                            if (message != null) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                message!,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
-                      if (message != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          message!,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -321,4 +327,119 @@ class LoadingOverlay extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Step-based analysis loader with progress messages
+class AnalysisStepLoader extends StatefulWidget {
+  final bool isImageAnalysis;
+
+  const AnalysisStepLoader({super.key, this.isImageAnalysis = true});
+
+  @override
+  State<AnalysisStepLoader> createState() => _AnalysisStepLoaderState();
+}
+
+class _AnalysisStepLoaderState extends State<AnalysisStepLoader>
+    with SingleTickerProviderStateMixin {
+  int _currentStep = 0;
+  late final List<_AnalysisStep> _steps;
+
+  @override
+  void initState() {
+    super.initState();
+    _steps = widget.isImageAnalysis
+        ? [
+            _AnalysisStep('Compressing Image...', Icons.compress),
+            _AnalysisStep('Scanning Ingredients...', Icons.search),
+            _AnalysisStep('Calculating Macros...', Icons.calculate),
+            _AnalysisStep('Checking Nutrients...', Icons.science),
+            _AnalysisStep('Finalizing Results...', Icons.check_circle_outline),
+          ]
+        : [
+            _AnalysisStep('Processing Request...', Icons.text_fields),
+            _AnalysisStep('Identifying Foods...', Icons.restaurant),
+            _AnalysisStep('Calculating Macros...', Icons.calculate),
+            _AnalysisStep('Checking Nutrients...', Icons.science),
+            _AnalysisStep('Finalizing Results...', Icons.check_circle_outline),
+          ];
+    _startStepAnimation();
+  }
+
+  void _startStepAnimation() {
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted && _currentStep < _steps.length - 1) {
+        setState(() => _currentStep++);
+        _startStepAnimation();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final step = _steps[_currentStep];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Animated icon
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.8, end: 1.0),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(step.icon, size: 40, color: AppColors.primary),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 24),
+        // Progress indicator
+        SizedBox(
+          width: 200,
+          child: LinearProgressIndicator(
+            value: (_currentStep + 1) / _steps.length,
+            backgroundColor: Colors.grey.shade300,
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+            borderRadius: BorderRadius.circular(4),
+            minHeight: 6,
+          ),
+        ),
+        const SizedBox(height: 20),
+        // Step text with fade animation
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: Text(
+            step.message,
+            key: ValueKey(_currentStep),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Step counter
+        Text(
+          'Step ${_currentStep + 1} of ${_steps.length}',
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnalysisStep {
+  final String message;
+  final IconData icon;
+
+  _AnalysisStep(this.message, this.icon);
 }

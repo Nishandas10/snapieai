@@ -50,7 +50,7 @@ const db = (0, firestore_1.getFirestore)();
 const openai = new openai_1.default({
     apiKey: process.env.OPENAI_API_KEY,
     maxRetries: 1, // Reduce retries for faster failure
-    timeout: 15000, // 15s timeout to fail fast
+    timeout: 30000, // 30s timeout to fail fast
 });
 // ========================================
 // FOOD ANALYSIS FUNCTION (OPTIMIZED)
