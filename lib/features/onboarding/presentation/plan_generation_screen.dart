@@ -102,10 +102,22 @@ class _PlanGenerationScreenState extends ConsumerState<PlanGenerationScreen>
   }
 
   Map<String, double> _calculatePersonalizedTargets(UserProfile profile) {
-    final weight = profile.weightKg ?? 70.0;
-    final height = profile.heightCm ?? 170.0;
-    final age = profile.age ?? 30;
+    // Provide sensible defaults for missing profile data
     final gender = profile.gender ?? 'male';
+    final age = profile.age ?? 30;
+
+    // Weight fallback: Use gender-based average if not provided
+    double weight = profile.weightKg ?? 0;
+    if (weight <= 0) {
+      weight = gender == 'female' ? 65.0 : 75.0; // Average adult weight
+    }
+
+    // Height fallback: Use gender-based average if not provided
+    double height = profile.heightCm ?? 0;
+    if (height <= 0) {
+      height = gender == 'female' ? 162.0 : 175.0; // Average adult height
+    }
+
     final goal = profile.goal;
     final healthConditions = profile.healthConditions;
     final dietaryPreferences = profile.dietaryPreferences;
@@ -254,14 +266,22 @@ class _PlanGenerationScreenState extends ConsumerState<PlanGenerationScreen>
     double carbsGrams = (tdee * carbsPercent) / 4;
     double fatGrams = (tdee * fatPercent) / 9;
 
-    // Apply protein minimum based on body weight (0.8-1.2g per kg for general, higher for muscle gain)
-    double minProtein = weight * 0.8;
+    // Apply protein minimum based on body weight (0.8-1.6g per kg for general, higher for muscle gain)
+    // Ensure minimum protein even with low/missing weight data
+    double minProtein = (weight * 0.8).clamp(50.0, weight * 2.2);
     if (goal == 'gain_muscle' || goal == 'athletic_performance') {
-      minProtein = weight * 1.6;
+      minProtein = (weight * 1.6).clamp(80.0, weight * 2.2);
     } else if (goal == 'lose_fat') {
-      minProtein = weight * 1.2; // Preserve muscle during deficit
+      minProtein = (weight * 1.2).clamp(
+        60.0,
+        weight * 2.2,
+      ); // Preserve muscle during deficit
     }
-    proteinGrams = proteinGrams.clamp(minProtein, weight * 2.2);
+
+    // Ensure protein is reasonable even with calculated values
+    proteinGrams = proteinGrams
+        .clamp(minProtein, weight * 2.2)
+        .clamp(50.0, 300.0);
 
     return {
       'dailyCalories': tdee.roundToDouble(),

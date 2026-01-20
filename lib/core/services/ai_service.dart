@@ -454,13 +454,24 @@ class AIService {
   Future<Map<String, dynamic>> calculateNutritionTargets(
     UserProfile profile,
   ) async {
+    // Provide sensible defaults for missing profile data
+    final gender = profile.gender ?? 'male';
+    final age = profile.age ?? 30;
+
+    // Weight fallback: Use gender-based average if not provided
+    double weight = profile.weightKg ?? 0;
+    if (weight <= 0) {
+      weight = gender == 'female' ? 65.0 : 75.0; // Average adult weight
+    }
+
+    // Height fallback: Use gender-based average if not provided
+    double height = profile.heightCm ?? 0;
+    if (height <= 0) {
+      height = gender == 'female' ? 162.0 : 175.0; // Average adult height
+    }
+
     // Basic Mifflin-St Jeor calculation
     double bmr;
-    final weight = profile.weightKg ?? 70.0;
-    final height = profile.heightCm ?? 170.0;
-    final age = profile.age ?? 30;
-    final gender = profile.gender ?? 'male';
-
     if (gender == 'female') {
       bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161;
     } else {
@@ -503,11 +514,16 @@ class AIService {
         break;
     }
 
+    // Calculate macros with minimum protein guarantee
+    final proteinGrams = ((tdee * 0.3) / 4).clamp(50.0, 300.0);
+    final carbsGrams = ((tdee * 0.4) / 4).clamp(100.0, 500.0);
+    final fatGrams = ((tdee * 0.3) / 9).clamp(30.0, 150.0);
+
     return {
       'dailyCalories': tdee.round(),
-      'proteinGrams': ((tdee * 0.3) / 4).round(),
-      'carbsGrams': ((tdee * 0.4) / 4).round(),
-      'fatGrams': ((tdee * 0.3) / 9).round(),
+      'proteinGrams': proteinGrams.round(),
+      'carbsGrams': carbsGrams.round(),
+      'fatGrams': fatGrams.round(),
       'fiberGrams': 30,
       'sodiumMg': profile.healthConditions.contains('high_blood_pressure')
           ? 1500

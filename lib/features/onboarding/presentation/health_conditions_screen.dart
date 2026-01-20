@@ -17,7 +17,6 @@ class HealthConditionsScreen extends ConsumerStatefulWidget {
 
 class _HealthConditionsScreenState
     extends ConsumerState<HealthConditionsScreen> {
-  bool _hasConditions = false;
   final Set<String> _selectedConditions = {};
 
   final List<Map<String, dynamic>> _conditions = [
@@ -106,6 +105,15 @@ class _HealthConditionsScreenState
             hasWeightGoal ? AppRoutes.weightGoalSpeed : AppRoutes.goals,
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: _continue,
+            child: const Text(
+              'Skip',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -123,104 +131,30 @@ class _HealthConditionsScreenState
               ),
               const SizedBox(height: 8),
               const Text(
-                'This helps us provide safer, more relevant recommendations',
+                'Select all that apply. This helps us provide safer, more relevant recommendations',
                 style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 24),
 
-              // Toggle for having conditions
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'I have health conditions',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Get personalized nutrition guidance',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch(
-                        value: _hasConditions,
-                        onChanged: (value) {
-                          setState(() {
-                            _hasConditions = value;
-                            if (!value) _selectedConditions.clear();
-                          });
-                        },
-                        activeColor: AppColors.primary,
-                      ),
-                    ],
-                  ),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: _conditions.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final condition = _conditions[index];
+                    final isSelected = _selectedConditions.contains(
+                      condition['value'],
+                    );
+                    return _ConditionTile(
+                      label: condition['label'],
+                      description: condition['description'],
+                      emoji: condition['emoji'],
+                      isSelected: isSelected,
+                      onTap: () => _toggleCondition(condition['value']),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(height: 16),
-
-              if (_hasConditions)
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: _conditions.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final condition = _conditions[index];
-                      final isSelected = _selectedConditions.contains(
-                        condition['value'],
-                      );
-                      return _ConditionTile(
-                        label: condition['label'],
-                        description: condition['description'],
-                        emoji: condition['emoji'],
-                        isSelected: isSelected,
-                        onTap: () => _toggleCondition(condition['value']),
-                      );
-                    },
-                  ),
-                )
-              else
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.health_and_safety_outlined,
-                          size: 80,
-                          color: AppColors.textHint,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'No worries!',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'You can always update this later\nin settings',
-                          style: TextStyle(color: AppColors.textSecondary),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
 
               const SizedBox(height: 24),
               PrimaryButton(text: 'Continue', onPressed: _continue),

@@ -78,12 +78,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   }
 
   // Convert weight from lbs to kg
-  double _getWeightInKg() {
+  double? _getWeightInKg() {
+    final text = _weightController.text.trim();
+    if (text.isEmpty) return null; // Return null if empty
+
     if (_isMetric) {
-      return double.tryParse(_weightController.text) ?? 0;
+      return double.tryParse(text);
     } else {
-      final lbs = double.tryParse(_weightController.text) ?? 0;
-      return lbs / 2.20462;
+      final lbs = double.tryParse(text);
+      return lbs != null ? lbs / 2.20462 : null;
     }
   }
 
@@ -99,7 +102,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         if (heightCm > 0) {
           _heightController.text = heightCm.round().toString();
         }
-        if (weightKg > 0) {
+        if (weightKg != null && weightKg > 0) {
           _weightController.text = weightKg.round().toString();
         }
         _heightInchesController.clear();
