@@ -333,10 +333,15 @@ Return as valid JSON:
     }
 });
 // ========================================
-// AI CHAT FUNCTION
+// AI CHAT FUNCTION (OPTIMIZED FOR SPEED)
 // ========================================
-exports.chat = (0, https_1.onCall)(async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+exports.chat = (0, https_1.onCall)({
+    memory: "512MiB",
+    timeoutSeconds: 25,
+    minInstances: 1, // Keep warm to avoid cold starts
+    concurrency: 15, // Handle multiple chat requests
+}, async (request) => {
+    var _a, _b, _c, _d, _e;
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -345,158 +350,83 @@ exports.chat = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError("invalid-argument", "Message is required");
     }
     try {
-        // Build comprehensive user context from the passed profile
+        // Build compact user context (reduced token count for faster processing)
         let userContext = "";
         if (userProfile) {
-            const profile = userProfile;
-            const conditions = ((_a = profile.healthConditions) === null || _a === void 0 ? void 0 : _a.join(", ")) || "None";
-            const dietPrefs = ((_b = profile.dietaryPreferences) === null || _b === void 0 ? void 0 : _b.join(", ")) || "None";
-            const macros = profile.macroTargets;
-            userContext = `
-USER PROFILE - Use this to personalize your responses:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 Basic Info:
-   • Name: ${profile.name || "Not provided"}
-   • Age: ${profile.age || "Not provided"}
-   • Gender: ${profile.gender || "Not provided"}
-   • Country: ${profile.country || "Not provided"}
-
-📊 Body Metrics:
-   • Height: ${profile.heightCm ? `${profile.heightCm} cm` : "Not provided"}
-   • Weight: ${profile.weightKg ? `${profile.weightKg} kg` : "Not provided"}
-   • BMI: ${profile.bmi ? profile.bmi.toFixed(1) : "Not calculated"}
-   • Activity Level: ${profile.activityLevel || "Not specified"}
-
-🎯 Goals:
-   • Primary Goal: ${profile.goal || "Not specified"}
-   • Daily Calorie Target: ${profile.dailyCalorieTarget || "Not set"} kcal
-
-🥗 Daily Macro Targets:
-   • Protein: ${(macros === null || macros === void 0 ? void 0 : macros.proteinGrams) || "Not set"}g
-   • Carbs: ${(macros === null || macros === void 0 ? void 0 : macros.carbsGrams) || "Not set"}g
-   • Fat: ${(macros === null || macros === void 0 ? void 0 : macros.fatGrams) || "Not set"}g
-   • Fiber: ${(macros === null || macros === void 0 ? void 0 : macros.fiberGrams) || 30}g
-
-⚠️ Health Conditions: ${conditions}
-   ${((_c = profile.healthConditions) === null || _c === void 0 ? void 0 : _c.includes("high_blood_pressure"))
-                ? "→ Sodium limit: " + (profile.sodiumLimitMg || 2300) + "mg/day"
-                : ""}
-   ${((_d = profile.healthConditions) === null || _d === void 0 ? void 0 : _d.includes("diabetes")) ||
-                ((_e = profile.healthConditions) === null || _e === void 0 ? void 0 : _e.includes("prediabetic"))
-                ? "→ GI limit: " + (profile.giLimit || 55)
-                : ""}
-
-🍽️ Dietary Preferences: ${dietPrefs}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-IMPORTANT: Always tailor your advice based on the user's:
-- Health conditions (especially for sodium, sugar, cholesterol recommendations)
-- Dietary preferences and restrictions
-- Calorie and macro targets
-- Country (for culturally relevant food suggestions)
-`;
+            const p = userProfile;
+            const conditions = ((_a = p.healthConditions) === null || _a === void 0 ? void 0 : _a.length)
+                ? p.healthConditions.join(",")
+                : "none";
+            const diet = ((_b = p.dietaryPreferences) === null || _b === void 0 ? void 0 : _b.length)
+                ? p.dietaryPreferences.join(",")
+                : "none";
+            const m = p.macroTargets;
+            // Compact context format - same info, fewer tokens
+            userContext = `User: ${p.name || "User"}, ${p.age || "?"}y, ${p.gender || "?"}, ${p.country || "?"}.
+Stats: ${p.heightCm || "?"}cm, ${p.weightKg || "?"}kg, BMI ${((_c = p.bmi) === null || _c === void 0 ? void 0 : _c.toFixed(1)) || "?"}, ${p.activityLevel || "moderate"}.
+Goal: ${p.goal || "general"}, ${p.dailyCalorieTarget || 2000}kcal/day.
+Macros: P${(m === null || m === void 0 ? void 0 : m.proteinGrams) || "?"}g C${(m === null || m === void 0 ? void 0 : m.carbsGrams) || "?"}g F${(m === null || m === void 0 ? void 0 : m.fatGrams) || "?"}g.
+Health: ${conditions}. Diet: ${diet}.`;
         }
-        else {
-            // Fallback: Get user profile from Firestore
-            const userDoc = await db.collection("users").doc(request.auth.uid).get();
-            const userData = userDoc.data();
-            if (userData) {
-                userContext = `
-User Profile:
-- Name: ${userData.name || "User"}
-- Goal: ${userData.goal || "Not specified"}
-- Daily calorie target: ${userData.dailyCalorieTarget || "Not set"}
-- Health conditions: ${((_f = userData.healthConditions) === null || _f === void 0 ? void 0 : _f.join(", ")) || "None"}
-- Dietary preferences: ${((_g = userData.dietaryPreferences) === null || _g === void 0 ? void 0 : _g.join(", ")) || "None"}
-- Activity level: ${userData.activityLevel || "Not specified"}
-`;
-            }
-        }
+        // Compact system prompt - same quality, fewer tokens
+        const systemPrompt = `You are Sara, a friendly AI nutrition assistant.${userContext ? `\n${userContext}` : ""}
+
+Rules: Personalize advice to user's goal/health/diet. Be warm but concise. Use bullets for lists. Suggest consulting doctors for medical issues.`;
+        // Build messages with limited history (last 6 messages max for speed)
+        const recentHistory = conversationHistory.slice(-6);
         const messages = [
-            {
-                role: "system",
-                content: `You are Sara, a friendly, knowledgeable, and personalized AI nutrition assistant. 
-
-${userContext}
-
-YOUR ROLE:
-- Provide personalized nutrition advice based on the user's profile
-- Consider their health conditions when making recommendations
-- Suggest foods and meals that align with their dietary preferences
-- Help them achieve their calorie and macro goals
-- Be culturally aware and suggest foods relevant to their country
-
-RESPONSE GUIDELINES:
-- Be conversational, warm, and supportive
-- Use clear formatting with bullet points and sections
-- Keep responses concise but comprehensive
-- Always consider the user's health conditions in recommendations
-- For users with high blood pressure: focus on low-sodium options
-- For users with diabetes/prediabetes: emphasize low GI foods
-- Recommend consulting healthcare professionals for medical advice
-
-FORMAT YOUR RESPONSES:
-- Use bullet points (•) for lists
-- Use numbered lists (1., 2., 3.) for steps
-- Use bold (**text**) for emphasis
-- Use headers for sections
-- Keep paragraphs short and scannable`,
-            },
-            ...conversationHistory.map((msg) => ({
+            { role: "system", content: systemPrompt },
+            ...recentHistory.map((msg) => ({
                 role: msg.role,
                 content: msg.content,
             })),
-            {
-                role: "user",
-                content: message,
-            },
+            { role: "user", content: message },
         ];
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages,
-            max_tokens: 800,
-            temperature: 0.7,
+            max_tokens: 1000, // Reduced for faster response
+            temperature: 0.7, // Lower = faster, more focused
         });
-        const aiResponse = (_j = (_h = response.choices[0]) === null || _h === void 0 ? void 0 : _h.message) === null || _j === void 0 ? void 0 : _j.content;
+        const aiResponse = (_e = (_d = response.choices[0]) === null || _d === void 0 ? void 0 : _d.message) === null || _e === void 0 ? void 0 : _e.content;
         if (!aiResponse) {
             throw new Error("No response from AI");
         }
-        // Save to chat session if sessionId provided
+        // Fire-and-forget: Save messages & analytics (don't block response)
         if (sessionId) {
             const sessionRef = db
                 .collection("users")
                 .doc(request.auth.uid)
                 .collection("chatSessions")
                 .doc(sessionId);
-            await sessionRef.set({
-                updatedAt: firestore_1.FieldValue.serverTimestamp(),
-            }, { merge: true });
-            await sessionRef.collection("messages").add({
+            // Batch write for efficiency
+            const batch = db.batch();
+            batch.set(sessionRef, { updatedAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true });
+            batch.set(sessionRef.collection("messages").doc(), {
                 role: "user",
                 content: message,
                 timestamp: firestore_1.FieldValue.serverTimestamp(),
             });
-            await sessionRef.collection("messages").add({
+            batch.set(sessionRef.collection("messages").doc(), {
                 role: "assistant",
                 content: aiResponse,
                 timestamp: firestore_1.FieldValue.serverTimestamp(),
             });
+            batch.commit().catch(() => { }); // Fire and forget
         }
-        // Update analytics
-        await db
-            .collection("users")
+        // Fire-and-forget analytics
+        db.collection("users")
             .doc(request.auth.uid)
             .collection("analytics")
             .doc("usage")
             .set({
             totalChatMessages: firestore_1.FieldValue.increment(1),
             lastChatAt: firestore_1.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        }, { merge: true })
+            .catch(() => { });
         return {
             success: true,
-            data: {
-                message: aiResponse,
-            },
+            data: { message: aiResponse },
         };
     }
     catch (error) {

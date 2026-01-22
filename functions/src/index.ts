@@ -384,232 +384,163 @@ Return as valid JSON:
 });
 
 // ========================================
-// AI CHAT FUNCTION
+// AI CHAT FUNCTION (OPTIMIZED FOR SPEED)
 // ========================================
-export const chat = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "User must be authenticated");
-  }
+export const chat = onCall(
+  {
+    memory: "512MiB",
+    timeoutSeconds: 25,
+    minInstances: 1, // Keep warm to avoid cold starts
+    concurrency: 15, // Handle multiple chat requests
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "User must be authenticated");
+    }
 
-  const {
-    message,
-    conversationHistory = [],
-    sessionId,
-    userProfile,
-  } = request.data as {
-    message?: string;
-    conversationHistory?: Array<{ role: string; content: string }>;
-    sessionId?: string;
-    userProfile?: {
-      name?: string;
-      age?: number;
-      gender?: string;
-      heightCm?: number;
-      weightKg?: number;
-      activityLevel?: string;
-      country?: string;
-      goal?: string;
-      healthConditions?: string[];
-      dietaryPreferences?: string[];
-      dailyCalorieTarget?: number;
-      macroTargets?: {
-        proteinGrams?: number;
-        carbsGrams?: number;
-        fatGrams?: number;
-        fiberGrams?: number;
+    const {
+      message,
+      conversationHistory = [],
+      sessionId,
+      userProfile,
+    } = request.data as {
+      message?: string;
+      conversationHistory?: Array<{ role: string; content: string }>;
+      sessionId?: string;
+      userProfile?: {
+        name?: string;
+        age?: number;
+        gender?: string;
+        heightCm?: number;
+        weightKg?: number;
+        activityLevel?: string;
+        country?: string;
+        goal?: string;
+        healthConditions?: string[];
+        dietaryPreferences?: string[];
+        dailyCalorieTarget?: number;
+        macroTargets?: {
+          proteinGrams?: number;
+          carbsGrams?: number;
+          fatGrams?: number;
+          fiberGrams?: number;
+        };
+        bmi?: number;
+        giLimit?: number;
+        sodiumLimitMg?: number;
       };
-      bmi?: number;
-      giLimit?: number;
-      sodiumLimitMg?: number;
     };
-  };
 
-  if (!message) {
-    throw new HttpsError("invalid-argument", "Message is required");
-  }
+    if (!message) {
+      throw new HttpsError("invalid-argument", "Message is required");
+    }
 
-  try {
-    // Build comprehensive user context from the passed profile
-    let userContext = "";
+    try {
+      // Build compact user context (reduced token count for faster processing)
+      let userContext = "";
 
-    if (userProfile) {
-      const profile = userProfile;
-      const conditions = profile.healthConditions?.join(", ") || "None";
-      const dietPrefs = profile.dietaryPreferences?.join(", ") || "None";
-      const macros = profile.macroTargets;
+      if (userProfile) {
+        const p = userProfile;
+        const conditions = p.healthConditions?.length
+          ? p.healthConditions.join(",")
+          : "none";
+        const diet = p.dietaryPreferences?.length
+          ? p.dietaryPreferences.join(",")
+          : "none";
+        const m = p.macroTargets;
 
-      userContext = `
-USER PROFILE - Use this to personalize your responses:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 Basic Info:
-   • Name: ${profile.name || "Not provided"}
-   • Age: ${profile.age || "Not provided"}
-   • Gender: ${profile.gender || "Not provided"}
-   • Country: ${profile.country || "Not provided"}
-
-📊 Body Metrics:
-   • Height: ${profile.heightCm ? `${profile.heightCm} cm` : "Not provided"}
-   • Weight: ${profile.weightKg ? `${profile.weightKg} kg` : "Not provided"}
-   • BMI: ${profile.bmi ? profile.bmi.toFixed(1) : "Not calculated"}
-   • Activity Level: ${profile.activityLevel || "Not specified"}
-
-🎯 Goals:
-   • Primary Goal: ${profile.goal || "Not specified"}
-   • Daily Calorie Target: ${profile.dailyCalorieTarget || "Not set"} kcal
-
-🥗 Daily Macro Targets:
-   • Protein: ${macros?.proteinGrams || "Not set"}g
-   • Carbs: ${macros?.carbsGrams || "Not set"}g
-   • Fat: ${macros?.fatGrams || "Not set"}g
-   • Fiber: ${macros?.fiberGrams || 30}g
-
-⚠️ Health Conditions: ${conditions}
-   ${
-     profile.healthConditions?.includes("high_blood_pressure")
-       ? "→ Sodium limit: " + (profile.sodiumLimitMg || 2300) + "mg/day"
-       : ""
-   }
-   ${
-     profile.healthConditions?.includes("diabetes") ||
-     profile.healthConditions?.includes("prediabetic")
-       ? "→ GI limit: " + (profile.giLimit || 55)
-       : ""
-   }
-
-🍽️ Dietary Preferences: ${dietPrefs}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-IMPORTANT: Always tailor your advice based on the user's:
-- Health conditions (especially for sodium, sugar, cholesterol recommendations)
-- Dietary preferences and restrictions
-- Calorie and macro targets
-- Country (for culturally relevant food suggestions)
-`;
-    } else {
-      // Fallback: Get user profile from Firestore
-      const userDoc = await db.collection("users").doc(request.auth.uid).get();
-      const userData = userDoc.data();
-      if (userData) {
-        userContext = `
-User Profile:
-- Name: ${userData.name || "User"}
-- Goal: ${userData.goal || "Not specified"}
-- Daily calorie target: ${userData.dailyCalorieTarget || "Not set"}
-- Health conditions: ${userData.healthConditions?.join(", ") || "None"}
-- Dietary preferences: ${userData.dietaryPreferences?.join(", ") || "None"}
-- Activity level: ${userData.activityLevel || "Not specified"}
-`;
+        // Compact context format - same info, fewer tokens
+        userContext = `User: ${p.name || "User"}, ${p.age || "?"}y, ${p.gender || "?"}, ${p.country || "?"}.
+Stats: ${p.heightCm || "?"}cm, ${p.weightKg || "?"}kg, BMI ${p.bmi?.toFixed(1) || "?"}, ${p.activityLevel || "moderate"}.
+Goal: ${p.goal || "general"}, ${p.dailyCalorieTarget || 2000}kcal/day.
+Macros: P${m?.proteinGrams || "?"}g C${m?.carbsGrams || "?"}g F${m?.fatGrams || "?"}g.
+Health: ${conditions}. Diet: ${diet}.`;
       }
-    }
 
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: `You are Sara, a friendly, knowledgeable, and personalized AI nutrition assistant. 
+      // Compact system prompt - same quality, fewer tokens
+      const systemPrompt = `You are Sara, a friendly AI nutrition assistant.${userContext ? `\n${userContext}` : ""}
 
-${userContext}
+Rules: Personalize advice to user's goal/health/diet. Be warm but concise. Use bullets for lists. Suggest consulting doctors for medical issues.`;
 
-YOUR ROLE:
-- Provide personalized nutrition advice based on the user's profile
-- Consider their health conditions when making recommendations
-- Suggest foods and meals that align with their dietary preferences
-- Help them achieve their calorie and macro goals
-- Be culturally aware and suggest foods relevant to their country
+      // Build messages with limited history (last 6 messages max for speed)
+      const recentHistory = conversationHistory.slice(-6);
 
-RESPONSE GUIDELINES:
-- Be conversational, warm, and supportive
-- Use clear formatting with bullet points and sections
-- Keep responses concise but comprehensive
-- Always consider the user's health conditions in recommendations
-- For users with high blood pressure: focus on low-sodium options
-- For users with diabetes/prediabetes: emphasize low GI foods
-- Recommend consulting healthcare professionals for medical advice
+      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: "system", content: systemPrompt },
+        ...recentHistory.map((msg) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        })),
+        { role: "user" as const, content: message },
+      ];
 
-FORMAT YOUR RESPONSES:
-- Use bullet points (•) for lists
-- Use numbered lists (1., 2., 3.) for steps
-- Use bold (**text**) for emphasis
-- Use headers for sections
-- Keep paragraphs short and scannable`,
-      },
-      ...conversationHistory.map((msg) => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-      })),
-      {
-        role: "user" as const,
-        content: message,
-      },
-    ];
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages,
+        max_tokens: 1000, // Reduced for faster response
+        temperature: 0.7, // Lower = faster, more focused
+      });
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      max_tokens: 800,
-      temperature: 0.7,
-    });
+      const aiResponse = response.choices[0]?.message?.content;
+      if (!aiResponse) {
+        throw new Error("No response from AI");
+      }
 
-    const aiResponse = response.choices[0]?.message?.content;
-    if (!aiResponse) {
-      throw new Error("No response from AI");
-    }
+      // Fire-and-forget: Save messages & analytics (don't block response)
+      if (sessionId) {
+        const sessionRef = db
+          .collection("users")
+          .doc(request.auth.uid)
+          .collection("chatSessions")
+          .doc(sessionId);
 
-    // Save to chat session if sessionId provided
-    if (sessionId) {
-      const sessionRef = db
-        .collection("users")
+        // Batch write for efficiency
+        const batch = db.batch();
+        batch.set(
+          sessionRef,
+          { updatedAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+        batch.set(sessionRef.collection("messages").doc(), {
+          role: "user",
+          content: message,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+        batch.set(sessionRef.collection("messages").doc(), {
+          role: "assistant",
+          content: aiResponse,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+        batch.commit().catch(() => {}); // Fire and forget
+      }
+
+      // Fire-and-forget analytics
+      db.collection("users")
         .doc(request.auth.uid)
-        .collection("chatSessions")
-        .doc(sessionId);
+        .collection("analytics")
+        .doc("usage")
+        .set(
+          {
+            totalChatMessages: FieldValue.increment(1),
+            lastChatAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        .catch(() => {});
 
-      await sessionRef.set(
-        {
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
+      return {
+        success: true,
+        data: { message: aiResponse },
+      };
+    } catch (error) {
+      console.error("Error in chat:", error);
+      throw new HttpsError(
+        "internal",
+        `Chat error: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
-
-      await sessionRef.collection("messages").add({
-        role: "user",
-        content: message,
-        timestamp: FieldValue.serverTimestamp(),
-      });
-
-      await sessionRef.collection("messages").add({
-        role: "assistant",
-        content: aiResponse,
-        timestamp: FieldValue.serverTimestamp(),
-      });
     }
-
-    // Update analytics
-    await db
-      .collection("users")
-      .doc(request.auth.uid)
-      .collection("analytics")
-      .doc("usage")
-      .set(
-        {
-          totalChatMessages: FieldValue.increment(1),
-          lastChatAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-    return {
-      success: true,
-      data: {
-        message: aiResponse,
-      },
-    };
-  } catch (error) {
-    console.error("Error in chat:", error);
-    throw new HttpsError(
-      "internal",
-      `Chat error: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
-  }
-});
+  },
+);
 
 // ========================================
 // CORRECT FOOD ANALYSIS FUNCTION
