@@ -72,9 +72,21 @@ exports.analyzeFood = (0, https_1.onCall)({
     try {
         let response;
         // Optimized compact prompt with all required nutrients
-        const COMPACT_SYSTEM_PROMPT = `Expert nutritionist. Return ONLY valid JSON, no markdown.
+        const COMPACT_SYSTEM_PROMPT = `Expert nutritionist. Return ONLY valid JSON, no markdown, no code blocks.
+CRITICAL: Ensure proper JSON syntax - escape quotes, no trailing commas, numbers only for numeric fields.
 {"items":[{"foodName":"","description":"","servingSize":"","servingSizeGrams":0,"calories":0,"protein":0,"carbohydrates":0,"fat":0,"fiber":0,"sugar":0,"sodium":0,"saturatedFat":0,"transFat":0,"cholesterol":0,"potassium":0,"vitaminA":0,"vitaminC":0,"calcium":0,"iron":0,"glycemicIndex":0,"glycemicLoad":0,"healthScore":0,"healthNotes":"","warnings":[],"confidence":0.9}],"totals":{"calories":0,"protein":0,"carbohydrates":0,"fat":0,"fiber":0,"sugar":0},"mealSummary":""}
-Rules: Realistic portions (roti=35g,rice cup=160g,egg=50g). Each food separate. All numbers (no strings). healthScore 0-10. glycemicIndex 0-100. glycemicLoad=GI*carbs/100. Vitamins/minerals as %DV.`;
+Rules:
+- Realistic portions (roti=35g, rice cup=160g, egg=50g, beer 500ml=500g)
+- Each food item separate in array
+- All numbers must be numeric (no strings), use 0 if unknown
+- healthScore: 0-10 (10=healthiest) for all foods and beverages
+- MACROS AND MICRONUTRIENT values: [Protein , Carbs , Fats , Fiber , Sugar , Sat. Fat] and [Sodium , Cholesterol , Potassium , VitaminA , VitaminC , Calcium , Iron ] - ALWAYS provide for ALL foods and beverages
+- GLYCEMIC INDEX (GI): ALWAYS provide for ALL foods. Common values: white rice=73, brown rice=50, white bread=75, whole wheat=74, banana=51, apple=36, beer=66, wine=0, milk=31, potato=78, pasta=49, oats=55. Use 0 ONLY for pure fats/proteins with zero carbs.
+- GLYCEMIC LOAD (GL): Calculate as (GI × carbs per serving) / 100. ALWAYS provide for ALL foods and beverages. Beer 500ml: GI=66, carbs~17g, GL=11
+- Vitamins/minerals as %DV - ALWAYS provide for ALL foods and beverages
+- For mixed dishes, estimate ingredients and their amounts
+- For beverages, include all macros and micronutrients
+- For alcohol: include calories from alcohol (7cal/g). Beer 500ml ≈ 215 cal, wine 150ml ≈ 125 cal`;
         if (isTextOnly) {
             // Text-based food analysis
             if (!userContext) {
@@ -123,12 +135,45 @@ Rules: Realistic portions (roti=35g,rice cup=160g,egg=50g). Each food separate. 
         if (!content) {
             throw new Error("No response from AI");
         }
-        // Parse JSON from response
+        // Parse JSON from response with better error handling
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             throw new Error("Could not parse AI response");
         }
-        const analysisResult = JSON.parse(jsonMatch[0]);
+        let jsonString = jsonMatch[0];
+        // Sanitize JSON: fix common issues from AI responses
+        // 1. Remove any control characters
+        jsonString = jsonString.replace(/[\x00-\x1F\x7F]/g, " ");
+        // 2. Fix unescaped quotes in string values (common with food names like "500ml")
+        jsonString = jsonString.replace(/:\s*"([^"]*?)(\d+)"([^"]*?)"/g, ': "$1$2\\"$3"');
+        // 3. Remove trailing commas before ] or }
+        jsonString = jsonString.replace(/,\s*([\]}])/g, "$1");
+        // 4. Fix any NaN or Infinity values
+        jsonString = jsonString.replace(/:\s*(NaN|Infinity|-Infinity)/g, ": 0");
+        let analysisResult;
+        try {
+            analysisResult = JSON.parse(jsonString);
+        }
+        catch (parseError) {
+            // If still failing, try more aggressive cleanup
+            console.error("Initial JSON parse failed, attempting recovery:", parseError);
+            // Try to extract just the items array if full parse fails
+            const itemsMatch = jsonString.match(/"items"\s*:\s*\[([\s\S]*?)\]/);
+            if (itemsMatch) {
+                try {
+                    // Build a minimal valid response
+                    const itemsStr = itemsMatch[0];
+                    const minimalJson = `{${itemsStr},"totals":{"calories":0,"protein":0,"carbohydrates":0,"fat":0,"fiber":0,"sugar":0},"mealSummary":"Food analyzed"}`;
+                    analysisResult = JSON.parse(minimalJson);
+                }
+                catch (_c) {
+                    throw new Error(`JSON parse error: ${parseError instanceof Error ? parseError.message : "Unknown"}`);
+                }
+            }
+            else {
+                throw new Error(`JSON parse error: ${parseError instanceof Error ? parseError.message : "Unknown"}`);
+            }
+        }
         // Fire-and-forget analytics update (don't await)
         db.collection("users")
             .doc(request.auth.uid)

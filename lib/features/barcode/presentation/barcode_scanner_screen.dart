@@ -9,6 +9,7 @@ import '../../../core/services/barcode_service.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/models/daily_log.dart';
 import '../../../core/providers/providers.dart';
+import '../../health_score/presentation/health_score_modal.dart';
 
 class BarcodeScannerScreen extends ConsumerStatefulWidget {
   final MealType? mealType;
@@ -88,6 +89,9 @@ class _BarcodeScannerScreenState extends ConsumerState<BarcodeScannerScreen> {
             .read(foodLogProvider.notifier)
             .addFoodToMeal(mealType, updatedFoodItem);
 
+        // Trigger health score recalculation
+        ref.read(healthScoreProvider.notifier).recalculateScore();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -96,12 +100,22 @@ class _BarcodeScannerScreenState extends ConsumerState<BarcodeScannerScreen> {
             ),
           );
 
-          // Navigate to food detail
-          context.pop();
-          context.push(
-            '${AppRoutes.foodDetail}/${updatedFoodItem.id}',
-            extra: {'food': updatedFoodItem, 'mealType': mealType},
+          // Show health score modal, then navigate to food detail
+          await showHealthScoreModal(
+            context,
+            onViewDetails: () {
+              context.push(AppRoutes.healthScoreDetail);
+            },
           );
+
+          if (mounted) {
+            // Navigate to food detail
+            context.pop();
+            context.push(
+              '${AppRoutes.foodDetail}/${updatedFoodItem.id}',
+              extra: {'food': updatedFoodItem, 'mealType': mealType},
+            );
+          }
         }
       } catch (e) {
         if (mounted) {

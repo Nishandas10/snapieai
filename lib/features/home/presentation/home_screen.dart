@@ -7,17 +7,81 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/widgets/nutrition_widgets.dart';
+import '../../../core/widgets/health_score_widgets.dart';
 import '../../../core/models/daily_log.dart';
+import '../../health_score/presentation/health_score_modal.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _hasShownMorningBriefing = false;
+  bool _hasShownAppOpenModal = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkMorningBriefing();
+      // Check immediately after frame if state is already ready
+      final healthState = ref.read(healthScoreProvider);
+      if (healthState.showAppOpenModal) {
+        _showAppOpenModal();
+      }
+    });
+  }
+
+  void _checkMorningBriefing() {
+    if (_hasShownMorningBriefing) return;
+
+    final healthState = ref.read(healthScoreProvider);
+    if (healthState.showMorningBriefing && healthState.yesterdayScore != null) {
+      _hasShownMorningBriefing = true;
+      showMorningBriefingDialog(context);
+    }
+  }
+
+  void _showAppOpenModal() {
+    if (_hasShownAppOpenModal) return;
+    if (_hasShownMorningBriefing) return;
+
+    _hasShownAppOpenModal = true;
+
+    // Show the health score modal on app open
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        showHealthScoreModal(
+          context,
+          onViewDetails: () {
+            // Navigate using router provider to avoid context issues in dialog callback
+            ref.read(appRouterProvider).push(AppRoutes.healthScoreDetail);
+          },
+        );
+        ref.read(healthScoreProvider.notifier).dismissAppOpenModal();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Listen for changes to showAppOpenModal (e.g. if provider loads after init)
+    ref.listen(healthScoreProvider, (previous, next) {
+      if (next.showMorningBriefing && next.yesterdayScore != null) {
+        _checkMorningBriefing();
+      } else if (next.showAppOpenModal && !next.isLoading) {
+        _showAppOpenModal();
+      }
+    });
     final profile = ref.watch(userProfileProvider);
     final foodLogState = ref.watch(foodLogProvider);
     final todayLog = foodLogState.todayLog;
     final macros = ref.watch(todayMacrosProvider);
+    final healthScore = ref.watch(currentHealthScoreProvider);
+    final healthState = ref.watch(healthScoreProvider);
 
     final calorieTarget = profile?.dailyCalorieTarget ?? 2000;
     final proteinTarget = profile?.macroTargets.proteinGrams ?? 150;
@@ -64,11 +128,13 @@ class HomeScreen extends ConsumerWidget {
                         ),
                         Row(
                           children: [
-                            IconButton(
-                              onPressed: () => context.push(AppRoutes.chat),
-                              icon: const Icon(Icons.chat_bubble_outline),
-                              color: AppColors.primary,
+                            // Health Score Indicator (replacing chat icon)
+                            HealthScoreIndicator(
+                              score: healthScore,
+                              onTap: () =>
+                                  context.push(AppRoutes.healthScoreDetail),
                             ),
+                            const SizedBox(width: 12),
                             GestureDetector(
                               onTap: () => context.go(AppRoutes.settings),
                               child: CircleAvatar(
@@ -92,17 +158,43 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textHint,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          DateFormat('EEEE, MMMM d').format(DateTime.now()),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textHint,
+                          ),
+                        ),
+                        if (healthState.todayScore?.streak != null &&
+                            healthState.todayScore!.streak > 1) ...[
+                          const SizedBox(width: 8),
+                          StreakBadge(
+                            streak: healthState.todayScore!.streak,
+                            compact: true,
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
+
+            // Morning Briefing Card (if yesterday's score is available but briefing was dismissed)
+            if (healthState.yesterdayScore != null &&
+                !healthState.showMorningBriefing &&
+                DateTime.now().hour < 12)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: MorningBriefingCard(
+                    yesterdayScore: healthState.yesterdayScore!.totalScore,
+                    streak: healthState.todayScore?.streak ?? 0,
+                  ),
+                ),
+              ),
 
             // Macro Summary Card
             SliverToBoxAdapter(

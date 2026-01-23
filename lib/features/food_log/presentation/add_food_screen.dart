@@ -11,6 +11,7 @@ import '../../../core/models/food_item.dart';
 import '../../../core/models/daily_log.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/services/subscription_service.dart';
+import '../../health_score/presentation/health_score_modal.dart';
 
 class AddFoodScreen extends ConsumerStatefulWidget {
   final MealType? initialMealType;
@@ -93,6 +94,9 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
           .read(foodLogProvider.notifier)
           .addFoodToMeal(_selectedMealType, food);
 
+      // Trigger health score recalculation
+      ref.read(healthScoreProvider.notifier).recalculateScore();
+
       final itemCount = food.subItems?.length ?? 1;
 
       if (mounted) {
@@ -102,12 +106,22 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
           ),
         );
 
-        // Navigate to food detail page for the logged food
-        context.pop();
-        context.push(
-          '${AppRoutes.foodDetail}/${food.id}',
-          extra: {'food': food, 'mealType': _selectedMealType},
+        // Show health score modal, then navigate to food detail
+        await showHealthScoreModal(
+          context,
+          onViewDetails: () {
+            context.push(AppRoutes.healthScoreDetail);
+          },
         );
+
+        if (mounted) {
+          // Navigate to food detail page for the logged food
+          context.pop();
+          context.push(
+            '${AppRoutes.foodDetail}/${food.id}',
+            extra: {'food': food, 'mealType': _selectedMealType},
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -141,11 +155,25 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
         .read(foodLogProvider.notifier)
         .addFoodToMeal(_selectedMealType, food);
 
+    // Trigger health score recalculation
+    ref.read(healthScoreProvider.notifier).recalculateScore();
+
     if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Food added successfully!')));
-      context.pop();
+
+      // Show health score modal
+      await showHealthScoreModal(
+        context,
+        onViewDetails: () {
+          context.push(AppRoutes.healthScoreDetail);
+        },
+      );
+
+      if (mounted) {
+        context.pop();
+      }
     }
   }
 

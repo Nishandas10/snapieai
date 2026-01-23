@@ -10,6 +10,7 @@ import '../../../core/models/daily_log.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../health_score/presentation/health_score_modal.dart';
 
 class VoiceInputScreen extends ConsumerStatefulWidget {
   final MealType? mealType;
@@ -198,6 +199,9 @@ class _VoiceInputScreenState extends ConsumerState<VoiceInputScreen>
           .read(foodLogProvider.notifier)
           .addFoodToMeal(_selectedMealType, food);
 
+      // Trigger health score recalculation
+      ref.read(healthScoreProvider.notifier).recalculateScore();
+
       final itemCount = food.subItems?.length ?? 1;
 
       if (mounted) {
@@ -208,11 +212,21 @@ class _VoiceInputScreenState extends ConsumerState<VoiceInputScreen>
           ),
         );
 
-        context.pop();
-        context.push(
-          '${AppRoutes.foodDetail}/${food.id}',
-          extra: {'food': food, 'mealType': _selectedMealType},
+        // Show health score modal, then navigate to food detail
+        await showHealthScoreModal(
+          context,
+          onViewDetails: () {
+            context.push(AppRoutes.healthScoreDetail);
+          },
         );
+
+        if (mounted) {
+          context.pop();
+          context.push(
+            '${AppRoutes.foodDetail}/${food.id}',
+            extra: {'food': food, 'mealType': _selectedMealType},
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

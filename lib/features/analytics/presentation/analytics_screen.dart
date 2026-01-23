@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -25,7 +26,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadHistoricalData();
+    // Use addPostFrameCallback to ensure providers are ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadHistoricalData();
+    });
   }
 
   Future<void> _loadHistoricalData() async {
@@ -47,16 +51,81 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     }
 
     try {
+      debugPrint('[AnalyticsScreen] Loading data from $startDate to $now');
+
+      // Get logs from provider
       final logs = await ref
           .read(foodLogProvider.notifier)
           .getLogsForDateRange(startDate, now);
+      debugPrint('[AnalyticsScreen] Got ${logs.length} logs from provider');
+
+      // Also include today's log if it exists and has data
+      final todayLog = ref.read(foodLogProvider).todayLog;
+      debugPrint(
+        '[AnalyticsScreen] Today\'s log: ${todayLog?.meals.length ?? 0} meals',
+      );
+      final todayKey =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // Check if today's log is already in the list
+      final hasTodayLog = logs.any((log) => log.dateKey == todayKey);
+
+      List<DailyLog> finalLogs = List.from(logs);
+      if (!hasTodayLog && todayLog != null && todayLog.meals.isNotEmpty) {
+        finalLogs.add(todayLog);
+      }
+
+      // Also try to load any logs from local storage that might have been missed
+      final allStoredDates = StorageService.getAllFoodLogDates();
+      debugPrint(
+        '[AnalyticsScreen] Found ${allStoredDates.length} stored dates: $allStoredDates',
+      );
+      for (final dateKey in allStoredDates) {
+        // Parse date from key
+        final parts = dateKey.split('-');
+        if (parts.length == 3) {
+          try {
+            final logDate = DateTime(
+              int.parse(parts[0]),
+              int.parse(parts[1]),
+              int.parse(parts[2]),
+            );
+
+            // Check if date is in range and not already loaded
+            if (!logDate.isBefore(startDate) &&
+                !logDate.isAfter(now) &&
+                !finalLogs.any((l) => l.dateKey == dateKey)) {
+              final logData = StorageService.getFoodLog(dateKey);
+              if (logData != null) {
+                final log = DailyLog.fromJson(logData);
+                if (log.meals.isNotEmpty) {
+                  finalLogs.add(log);
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('[AnalyticsScreen] Error parsing date key $dateKey: $e');
+          }
+        }
+      }
+
+      // Sort logs by date
+      finalLogs.sort((a, b) => a.date.compareTo(b.date));
+      debugPrint('[AnalyticsScreen] Final logs count: ${finalLogs.length}');
+      for (final log in finalLogs) {
+        debugPrint(
+          '[AnalyticsScreen]   - ${log.dateKey}: ${log.meals.length} meals, ${log.totalCalories.toStringAsFixed(0)} cal',
+        );
+      }
+
       if (mounted) {
         setState(() {
-          _historicalLogs = logs;
+          _historicalLogs = finalLogs;
           _isLoading = false;
         });
       }
     } catch (e) {
+      debugPrint('[AnalyticsScreen] Error loading historical data: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }

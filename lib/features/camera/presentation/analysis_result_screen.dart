@@ -13,6 +13,7 @@ import '../../../core/models/food_item.dart';
 import '../../../core/models/daily_log.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/ai_service.dart';
+import '../../health_score/presentation/health_score_modal.dart';
 
 class AnalysisResultScreen extends ConsumerStatefulWidget {
   final String? imagePath;
@@ -105,9 +106,12 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
       _saveToFirestoreInBackground(_detectedFood!);
     }
 
+    // Trigger health score recalculation
+    ref.read(healthScoreProvider.notifier).recalculateScore();
+
     final itemCount = _detectedFood!.subItems?.length ?? 1;
 
-    // Show success and navigate immediately
+    // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -118,16 +122,25 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
         ),
       );
 
-      // Navigate to food detail page for the logged food
-      context.pop();
-      context.push(
-        '${AppRoutes.foodDetail}/${_detectedFood!.id}',
-        extra: {
-          'food': _detectedFood,
-          'mealType': _selectedMealType,
-          'imagePath': widget.imagePath,
+      // Show health score modal, then navigate to food detail
+      showHealthScoreModal(
+        context,
+        onViewDetails: () {
+          context.push(AppRoutes.healthScoreDetail);
         },
-      );
+      ).then((_) {
+        if (mounted) {
+          context.pop();
+          context.push(
+            '${AppRoutes.foodDetail}/${_detectedFood!.id}',
+            extra: {
+              'food': _detectedFood,
+              'mealType': _selectedMealType,
+              'imagePath': widget.imagePath,
+            },
+          );
+        }
+      });
     }
   }
 
@@ -142,9 +155,12 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
       _saveToFirestoreInBackground(_detectedFood!);
     }
 
+    // Trigger health score recalculation
+    ref.read(healthScoreProvider.notifier).recalculateScore();
+
     final itemCount = _detectedFood!.subItems?.length ?? 1;
 
-    // Foods already saved in background, just navigate to detail
+    // Foods already saved in background, show health score modal
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -155,15 +171,25 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
         ),
       );
 
-      context.pop();
-      context.push(
-        '${AppRoutes.foodDetail}/${_detectedFood!.id}',
-        extra: {
-          'food': _detectedFood,
-          'mealType': _selectedMealType,
-          'imagePath': widget.imagePath,
+      // Show health score modal, then navigate to food detail
+      showHealthScoreModal(
+        context,
+        onViewDetails: () {
+          context.push(AppRoutes.healthScoreDetail);
         },
-      );
+      ).then((_) {
+        if (mounted) {
+          context.pop();
+          context.push(
+            '${AppRoutes.foodDetail}/${_detectedFood!.id}',
+            extra: {
+              'food': _detectedFood,
+              'mealType': _selectedMealType,
+              'imagePath': widget.imagePath,
+            },
+          );
+        }
+      });
     }
   }
 
