@@ -14,8 +14,8 @@ class MealReminderScreen extends ConsumerStatefulWidget {
 class _MealReminderScreenState extends ConsumerState<MealReminderScreen> {
   bool _remindersEnabled = false;
   TimeOfDay _breakfastTime = const TimeOfDay(hour: 8, minute: 0);
-  TimeOfDay _lunchTime = const TimeOfDay(hour: 12, minute: 30);
-  TimeOfDay _dinnerTime = const TimeOfDay(hour: 19, minute: 0);
+  TimeOfDay _lunchTime = const TimeOfDay(hour: 13, minute: 0);
+  TimeOfDay _dinnerTime = const TimeOfDay(hour: 20, minute: 0);
 
   @override
   void initState() {

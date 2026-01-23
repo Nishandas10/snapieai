@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz_data;
 
 import 'storage_service.dart';
 
@@ -14,12 +14,15 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   static bool _isInitialized = false;
+  static String _deviceTimezone = 'UTC';
 
   // Storage keys for meal reminder times
   static const String _mealRemindersEnabledKey = 'meal_reminders_enabled';
   static const String _breakfastTimeKey = 'breakfast_reminder_time';
   static const String _lunchTimeKey = 'lunch_reminder_time';
   static const String _dinnerTimeKey = 'dinner_reminder_time';
+  static const String _remindersSetupCompleteKey =
+      'meal_reminders_setup_complete';
 
   // Notification IDs
   static const int _breakfastNotificationId = 1001;
@@ -31,41 +34,18 @@ class NotificationService {
     if (_isInitialized) return;
 
     // Initialize timezone database
-    tz.initializeTimeZones();
+    tz_data.initializeTimeZones();
 
     // Get the device's local timezone using flutter_timezone
-    try {
-      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
-      // Extract just the timezone ID from the TimezoneInfo string
-      // Format is: "TimezoneInfo(Asia/Calcutta, (locale: en_IN, name: India Standard Time))"
-      String timezoneName = timezoneInfo.toString();
-
-      // Extract timezone between "TimezoneInfo(" and the first comma
-      final match = RegExp(r'TimezoneInfo\(([^,]+)').firstMatch(timezoneName);
-      if (match != null) {
-        timezoneName = match.group(1)!.trim();
-      }
-
-      // Handle common timezone name variations
-      if (timezoneName == 'Asia/Calcutta') {
-        timezoneName = 'Asia/Kolkata'; // Calcutta is an old name for Kolkata
-      }
-
-      final location = tz.getLocation(timezoneName);
-      tz.setLocalLocation(location);
-      debugPrint('Timezone set to: $timezoneName');
-    } catch (e) {
-      debugPrint('Error setting timezone: $e, using UTC');
-      tz.setLocalLocation(tz.UTC);
-    }
+    await _initializeTimezone();
 
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+      requestAlertPermission: false, // Don't auto-request, we'll do it manually
+      requestBadgePermission: false,
+      requestSoundPermission: false,
     );
 
     const initSettings = InitializationSettings(
@@ -80,41 +60,127 @@ class NotificationService {
 
     _isInitialized = true;
 
-    // Reschedule notifications on app start
+    // Reschedule notifications on app start (with fresh timezone)
     await _rescheduleNotifications();
+
+    debugPrint(
+      '[NotificationService] Initialized with timezone: $_deviceTimezone',
+    );
+  }
+
+  /// Initialize timezone - called on init and when rescheduling
+  static Future<void> _initializeTimezone() async {
+    try {
+      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+      String timezoneName = timezoneInfo.toString();
+
+      // Extract timezone between "TimezoneInfo(" and the first comma
+      final match = RegExp(r'TimezoneInfo\(([^,]+)').firstMatch(timezoneName);
+      if (match != null) {
+        timezoneName = match.group(1)!.trim();
+      }
+
+      // Handle common timezone name variations
+      final timezoneMapping = {
+        'Asia/Calcutta': 'Asia/Kolkata',
+        'US/Eastern': 'America/New_York',
+        'US/Pacific': 'America/Los_Angeles',
+        'US/Central': 'America/Chicago',
+        'US/Mountain': 'America/Denver',
+      };
+
+      if (timezoneMapping.containsKey(timezoneName)) {
+        timezoneName = timezoneMapping[timezoneName]!;
+      }
+
+      final location = tz.getLocation(timezoneName);
+      tz.setLocalLocation(location);
+      _deviceTimezone = timezoneName;
+      debugPrint('[NotificationService] Timezone set to: $timezoneName');
+    } catch (e) {
+      debugPrint('[NotificationService] Error setting timezone: $e, using UTC');
+      tz.setLocalLocation(tz.UTC);
+      _deviceTimezone = 'UTC';
+    }
   }
 
   static void _onNotificationTap(NotificationResponse response) {
-    debugPrint('Notification tapped: ${response.payload}');
+    debugPrint(
+      '[NotificationService] Notification tapped: ${response.payload}',
+    );
   }
 
   /// Request notification permissions
   static Future<bool> requestPermissions() async {
-    final android = _notifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
+    try {
+      final android = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
-    if (android != null) {
-      final granted = await android.requestNotificationsPermission();
-      return granted ?? false;
+      if (android != null) {
+        // Request notification permission for Android 13+
+        final granted = await android.requestNotificationsPermission();
+
+        // Also request exact alarm permission for reliable scheduling
+        final exactAlarmGranted = await android.requestExactAlarmsPermission();
+        debugPrint(
+          '[NotificationService] Android permissions - notifications: $granted, exactAlarms: $exactAlarmGranted',
+        );
+
+        return granted ?? false;
+      }
+
+      final iOS = _notifications
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
+
+      if (iOS != null) {
+        final granted = await iOS.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+        debugPrint('[NotificationService] iOS permissions granted: $granted');
+        return granted ?? false;
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[NotificationService] Error requesting permissions: $e');
+      return false;
     }
+  }
 
-    final iOS = _notifications
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >();
+  /// Check if notification permissions are granted
+  static Future<bool> arePermissionsGranted() async {
+    try {
+      final android = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
-    if (iOS != null) {
-      final granted = await iOS.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      return granted ?? false;
+      if (android != null) {
+        return await android.areNotificationsEnabled() ?? false;
+      }
+
+      // iOS - assume granted if we got here (they would have been requested)
+      return true;
+    } catch (e) {
+      debugPrint('[NotificationService] Error checking permissions: $e');
+      return false;
     }
+  }
 
-    return true;
+  /// Check if reminders setup is complete (for onboarding)
+  static bool isRemindersSetupComplete() {
+    return StorageService.getBool(_remindersSetupCompleteKey) ?? false;
+  }
+
+  /// Mark reminders setup as complete
+  static Future<void> setRemindersSetupComplete(bool complete) async {
+    await StorageService.setBool(_remindersSetupCompleteKey, complete);
   }
 
   /// Check if meal reminders are enabled
@@ -127,10 +193,16 @@ class NotificationService {
     await StorageService.setBool(_mealRemindersEnabledKey, enabled);
 
     if (enabled) {
+      // Refresh timezone before scheduling
+      await _initializeTimezone();
       await _rescheduleNotifications();
     } else {
       await cancelAllMealReminders();
     }
+
+    debugPrint(
+      '[NotificationService] Meal reminders ${enabled ? 'enabled' : 'disabled'}',
+    );
   }
 
   /// Get breakfast reminder time (hour, minute)
@@ -138,7 +210,9 @@ class NotificationService {
     final timeStr = StorageService.getString(_breakfastTimeKey);
     if (timeStr != null) {
       final parts = timeStr.split(':');
-      return (int.parse(parts[0]), int.parse(parts[1]));
+      if (parts.length == 2) {
+        return (int.tryParse(parts[0]) ?? 8, int.tryParse(parts[1]) ?? 0);
+      }
     }
     return (8, 0); // Default 8:00 AM
   }
@@ -148,9 +222,11 @@ class NotificationService {
     final timeStr = StorageService.getString(_lunchTimeKey);
     if (timeStr != null) {
       final parts = timeStr.split(':');
-      return (int.parse(parts[0]), int.parse(parts[1]));
+      if (parts.length == 2) {
+        return (int.tryParse(parts[0]) ?? 13, int.tryParse(parts[1]) ?? 0);
+      }
     }
-    return (12, 30); // Default 12:30 PM
+    return (13, 0); // Default 1:00 PM
   }
 
   /// Get dinner reminder time (hour, minute)
@@ -158,15 +234,18 @@ class NotificationService {
     final timeStr = StorageService.getString(_dinnerTimeKey);
     if (timeStr != null) {
       final parts = timeStr.split(':');
-      return (int.parse(parts[0]), int.parse(parts[1]));
+      if (parts.length == 2) {
+        return (int.tryParse(parts[0]) ?? 20, int.tryParse(parts[1]) ?? 0);
+      }
     }
-    return (19, 0); // Default 7:00 PM
+    return (20, 0); // Default 8:00 PM
   }
 
   /// Set breakfast reminder time
   static Future<void> setBreakfastTime(int hour, int minute) async {
     await StorageService.setString(_breakfastTimeKey, '$hour:$minute');
     if (isMealRemindersEnabled()) {
+      await _initializeTimezone(); // Refresh timezone
       await _scheduleBreakfastReminder(hour, minute);
     }
   }
@@ -175,6 +254,7 @@ class NotificationService {
   static Future<void> setLunchTime(int hour, int minute) async {
     await StorageService.setString(_lunchTimeKey, '$hour:$minute');
     if (isMealRemindersEnabled()) {
+      await _initializeTimezone(); // Refresh timezone
       await _scheduleLunchReminder(hour, minute);
     }
   }
@@ -183,21 +263,41 @@ class NotificationService {
   static Future<void> setDinnerTime(int hour, int minute) async {
     await StorageService.setString(_dinnerTimeKey, '$hour:$minute');
     if (isMealRemindersEnabled()) {
+      await _initializeTimezone(); // Refresh timezone
       await _scheduleDinnerReminder(hour, minute);
     }
   }
 
   /// Schedule all meal reminders
   static Future<void> _rescheduleNotifications() async {
-    if (!isMealRemindersEnabled()) return;
+    if (!isMealRemindersEnabled()) {
+      debugPrint(
+        '[NotificationService] Reminders disabled, skipping reschedule',
+      );
+      return;
+    }
+
+    // Cancel existing notifications first
+    await cancelAllMealReminders();
 
     final (breakfastHour, breakfastMinute) = getBreakfastTime();
     final (lunchHour, lunchMinute) = getLunchTime();
     final (dinnerHour, dinnerMinute) = getDinnerTime();
 
+    debugPrint('[NotificationService] Scheduling reminders:');
+    debugPrint('  Breakfast: $breakfastHour:$breakfastMinute');
+    debugPrint('  Lunch: $lunchHour:$lunchMinute');
+    debugPrint('  Dinner: $dinnerHour:$dinnerMinute');
+
     await _scheduleBreakfastReminder(breakfastHour, breakfastMinute);
     await _scheduleLunchReminder(lunchHour, lunchMinute);
     await _scheduleDinnerReminder(dinnerHour, dinnerMinute);
+  }
+
+  /// Force reschedule all notifications (public method)
+  static Future<void> rescheduleAllNotifications() async {
+    await _initializeTimezone();
+    await _rescheduleNotifications();
   }
 
   /// Schedule breakfast reminder
@@ -246,69 +346,107 @@ class NotificationService {
     required String body,
     required String payload,
   }) async {
-    await _notifications.cancel(id);
+    try {
+      // Cancel existing notification first
+      await _notifications.cancel(id);
 
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduledDate = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
+      // Get current time in device's local timezone
+      final now = tz.TZDateTime.now(tz.local);
 
-    // If the time has passed today, schedule for tomorrow
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+      // Create scheduled time in local timezone
+      var scheduledDate = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        hour,
+        minute,
+        0, // seconds
+      );
+
+      // If the time has passed today, schedule for tomorrow
+      if (scheduledDate.isBefore(now) || scheduledDate.isAtSameMomentAs(now)) {
+        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      }
+
+      debugPrint('[NotificationService] Scheduling $payload:');
+      debugPrint('  Current time (local): $now');
+      debugPrint('  Scheduled time: $scheduledDate');
+      debugPrint('  Timezone: $_deviceTimezone');
+
+      const androidDetails = AndroidNotificationDetails(
+        'meal_reminders',
+        'Meal Reminders',
+        channelDescription: 'Reminders to log your meals',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        enableVibration: true,
+        playSound: true,
+        // Use exact alarms for reliable delivery
+        category: AndroidNotificationCategory.reminder,
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.active,
+      );
+
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _notifications.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduledDate,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
+        payload: payload,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.wallClockTime,
+      );
+
+      debugPrint(
+        '[NotificationService] Successfully scheduled $payload reminder',
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] Error scheduling $payload: $e');
     }
-
-    const androidDetails = AndroidNotificationDetails(
-      'meal_reminders',
-      'Meal Reminders',
-      channelDescription: 'Reminders to log your meals',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _notifications.zonedSchedule(
-      id,
-      title,
-      body,
-      scheduledDate,
-      details,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: payload,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-
-    debugPrint('Scheduled $payload reminder at $hour:$minute');
   }
 
   /// Cancel all meal reminders
   static Future<void> cancelAllMealReminders() async {
-    await _notifications.cancel(_breakfastNotificationId);
-    await _notifications.cancel(_lunchNotificationId);
-    await _notifications.cancel(_dinnerNotificationId);
-    debugPrint('Cancelled all meal reminders');
+    try {
+      await _notifications.cancel(_breakfastNotificationId);
+      await _notifications.cancel(_lunchNotificationId);
+      await _notifications.cancel(_dinnerNotificationId);
+      debugPrint('[NotificationService] Cancelled all meal reminders');
+    } catch (e) {
+      debugPrint('[NotificationService] Error cancelling reminders: $e');
+    }
   }
 
   /// Cancel all notifications
   static Future<void> cancelAll() async {
-    await _notifications.cancelAll();
+    try {
+      await _notifications.cancelAll();
+      debugPrint('[NotificationService] Cancelled all notifications');
+    } catch (e) {
+      debugPrint(
+        '[NotificationService] Error cancelling all notifications: $e',
+      );
+    }
+  }
+
+  /// Get pending notifications (for debugging)
+  static Future<List<PendingNotificationRequest>>
+  getPendingNotifications() async {
+    return await _notifications.pendingNotificationRequests();
   }
 }

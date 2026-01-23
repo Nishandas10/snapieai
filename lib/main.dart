@@ -95,6 +95,12 @@ class _SnapieAIState extends ConsumerState<SnapieAI>
       // Refresh subscription status when app comes back to foreground
       debugPrint('[SnapieAI] App resumed - refreshing subscription status');
       ref.read(subscriptionProvider.notifier).refresh();
+
+      // Reschedule notifications to ensure they're always using correct timezone
+      if (NotificationService.isMealRemindersEnabled()) {
+        debugPrint('[SnapieAI] App resumed - rescheduling notifications');
+        NotificationService.rescheduleAllNotifications();
+      }
     }
   }
 

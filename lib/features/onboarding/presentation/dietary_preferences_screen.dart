@@ -51,7 +51,7 @@ class _DietaryPreferencesScreenState
         .updateProfile(dietaryPreferences: _selectedPreferences.toList());
 
     if (mounted) {
-      context.go(AppRoutes.planGeneration);
+      context.go(AppRoutes.mealRemindersOnboarding);
     }
   }
 
@@ -64,6 +64,22 @@ class _DietaryPreferencesScreenState
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go(AppRoutes.healthConditions),
         ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await ref
+                  .read(userProfileProvider.notifier)
+                  .updateProfile(dietaryPreferences: []);
+              if (mounted) {
+                context.go(AppRoutes.mealRemindersOnboarding);
+              }
+            },
+            child: const Text(
+              'Skip',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -107,21 +123,7 @@ class _DietaryPreferencesScreenState
               ),
 
               const SizedBox(height: 24),
-              PrimaryButton(text: 'Generate My Plan', onPressed: _continue),
-              const SizedBox(height: 12),
-              Center(
-                child: TextButton(
-                  onPressed: () async {
-                    await ref
-                        .read(userProfileProvider.notifier)
-                        .updateProfile(dietaryPreferences: []);
-                    if (mounted) {
-                      context.go(AppRoutes.planGeneration);
-                    }
-                  },
-                  child: const Text('Skip for now'),
-                ),
-              ),
+              PrimaryButton(text: 'Continue', onPressed: _continue),
             ],
           ),
         ),

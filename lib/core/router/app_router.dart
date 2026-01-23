@@ -10,6 +10,7 @@ import '../../features/onboarding/presentation/profile_setup_screen.dart';
 import '../../features/onboarding/presentation/goals_screen.dart';
 import '../../features/onboarding/presentation/health_conditions_screen.dart';
 import '../../features/onboarding/presentation/dietary_preferences_screen.dart';
+import '../../features/onboarding/presentation/meal_reminders_onboarding_screen.dart';
 import '../../features/onboarding/presentation/plan_generation_screen.dart';
 import '../../features/onboarding/presentation/auth_screen.dart';
 import '../../features/onboarding/presentation/target_weight_screen.dart';
@@ -52,6 +53,7 @@ class AppRoutes {
   static const String weightGoalSpeed = '/weight-goal-speed';
   static const String healthConditions = '/health-conditions';
   static const String dietaryPreferences = '/dietary-preferences';
+  static const String mealRemindersOnboarding = '/meal-reminders-onboarding';
   static const String planGeneration = '/plan-generation';
   static const String main = '/main';
   static const String home = '/home';
@@ -126,6 +128,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.dietaryPreferences,
         name: 'dietaryPreferences',
         builder: (context, state) => const DietaryPreferencesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.mealRemindersOnboarding,
+        name: 'mealRemindersOnboarding',
+        builder: (context, state) => const MealRemindersOnboardingScreen(),
       ),
       GoRoute(
         path: AppRoutes.planGeneration,
