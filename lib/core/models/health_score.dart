@@ -32,19 +32,21 @@ class HealthScoreBreakdown extends Equatable {
       micronutrientScore +
       consistencyScore;
 
-  /// Get score category label
+  /// Get score category label - Habit builder focused messaging
   String get categoryLabel {
     final score = totalScore;
-    if (score >= 80) return 'Optimal Bio-State';
-    if (score >= 51) return 'Room for Improvement';
-    return 'Metabolic Crash Likely';
+    if (score >= 80) return 'Champion! 🏆';
+    if (score >= 65) return 'Great Progress! 💪';
+    if (score >= 50) return 'Building Momentum! 🚀';
+    if (score >= 30) return 'Good Start! 🌱';
+    return 'Let\'s Get Started! ✨';
   }
 
   /// Get score category color name
   String get categoryColorName {
     final score = totalScore;
     if (score >= 80) return 'green';
-    if (score >= 51) return 'yellow';
+    if (score >= 50) return 'yellow';
     return 'red';
   }
 

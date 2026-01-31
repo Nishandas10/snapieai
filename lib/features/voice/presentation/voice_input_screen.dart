@@ -10,7 +10,6 @@ import '../../../core/models/daily_log.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../health_score/presentation/health_score_modal.dart';
 
 class VoiceInputScreen extends ConsumerStatefulWidget {
   final MealType? mealType;
@@ -212,21 +211,12 @@ class _VoiceInputScreenState extends ConsumerState<VoiceInputScreen>
           ),
         );
 
-        // Show health score modal, then navigate to food detail
-        await showHealthScoreModal(
-          context,
-          onViewDetails: () {
-            context.push(AppRoutes.healthScoreDetail);
-          },
+        // Navigate to food detail
+        context.pop();
+        context.push(
+          '${AppRoutes.foodDetail}/${food.id}',
+          extra: {'food': food, 'mealType': _selectedMealType},
         );
-
-        if (mounted) {
-          context.pop();
-          context.push(
-            '${AppRoutes.foodDetail}/${food.id}',
-            extra: {'food': food, 'mealType': _selectedMealType},
-          );
-        }
       }
     } catch (e) {
       if (mounted) {

@@ -13,7 +13,6 @@ import '../../../core/models/food_item.dart';
 import '../../../core/models/daily_log.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/ai_service.dart';
-import '../../health_score/presentation/health_score_modal.dart';
 
 class AnalysisResultScreen extends ConsumerStatefulWidget {
   final String? imagePath;
@@ -111,7 +110,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
 
     final itemCount = _detectedFood!.subItems?.length ?? 1;
 
-    // Show success message
+    // Show success message and navigate to food detail
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -122,25 +121,16 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
         ),
       );
 
-      // Show health score modal, then navigate to food detail
-      showHealthScoreModal(
-        context,
-        onViewDetails: () {
-          context.push(AppRoutes.healthScoreDetail);
+      // Navigate directly to food detail without showing health score modal
+      context.pop();
+      context.push(
+        '${AppRoutes.foodDetail}/${_detectedFood!.id}',
+        extra: {
+          'food': _detectedFood,
+          'mealType': _selectedMealType,
+          'imagePath': widget.imagePath,
         },
-      ).then((_) {
-        if (mounted) {
-          context.pop();
-          context.push(
-            '${AppRoutes.foodDetail}/${_detectedFood!.id}',
-            extra: {
-              'food': _detectedFood,
-              'mealType': _selectedMealType,
-              'imagePath': widget.imagePath,
-            },
-          );
-        }
-      });
+      );
     }
   }
 
@@ -160,7 +150,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
 
     final itemCount = _detectedFood!.subItems?.length ?? 1;
 
-    // Foods already saved in background, show health score modal
+    // Foods already saved in background, navigate to food detail
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -171,25 +161,16 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
         ),
       );
 
-      // Show health score modal, then navigate to food detail
-      showHealthScoreModal(
-        context,
-        onViewDetails: () {
-          context.push(AppRoutes.healthScoreDetail);
+      // Navigate directly to food detail without showing health score modal
+      context.pop();
+      context.push(
+        '${AppRoutes.foodDetail}/${_detectedFood!.id}',
+        extra: {
+          'food': _detectedFood,
+          'mealType': _selectedMealType,
+          'imagePath': widget.imagePath,
         },
-      ).then((_) {
-        if (mounted) {
-          context.pop();
-          context.push(
-            '${AppRoutes.foodDetail}/${_detectedFood!.id}',
-            extra: {
-              'food': _detectedFood,
-              'mealType': _selectedMealType,
-              'imagePath': widget.imagePath,
-            },
-          );
-        }
-      });
+      );
     }
   }
 

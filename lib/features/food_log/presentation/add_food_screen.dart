@@ -11,7 +11,6 @@ import '../../../core/models/food_item.dart';
 import '../../../core/models/daily_log.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/services/subscription_service.dart';
-import '../../health_score/presentation/health_score_modal.dart';
 
 class AddFoodScreen extends ConsumerStatefulWidget {
   final MealType? initialMealType;
@@ -106,14 +105,6 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
           ),
         );
 
-        // Show health score modal, then navigate to food detail
-        await showHealthScoreModal(
-          context,
-          onViewDetails: () {
-            context.push(AppRoutes.healthScoreDetail);
-          },
-        );
-
         if (mounted) {
           // Navigate to food detail page for the logged food
           context.pop();
@@ -162,14 +153,6 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Food added successfully!')));
-
-      // Show health score modal
-      await showHealthScoreModal(
-        context,
-        onViewDetails: () {
-          context.push(AppRoutes.healthScoreDetail);
-        },
-      );
 
       if (mounted) {
         context.pop();

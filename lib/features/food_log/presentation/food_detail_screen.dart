@@ -713,7 +713,7 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
                   controller: _glycemicIndexController,
                   isEditing: _isEditing,
                   onChanged: (_) => setState(() => _hasChanges = true),
-                  isHighGI: _food.isHighGI,
+                  isGlycemicIndex: true,
                 ),
               ),
               const SizedBox(width: 12),
@@ -724,6 +724,7 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
                   controller: _glycemicLoadController,
                   isEditing: _isEditing,
                   onChanged: (_) => setState(() => _hasChanges = true),
+                  isGlycemicIndex: false,
                 ),
               ),
             ],
@@ -1146,7 +1147,7 @@ class _GlycemicCard extends StatelessWidget {
   final TextEditingController controller;
   final bool isEditing;
   final ValueChanged<String>? onChanged;
-  final bool isHighGI;
+  final bool isGlycemicIndex; // true for GI, false for GL
 
   const _GlycemicCard({
     required this.label,
@@ -1154,12 +1155,35 @@ class _GlycemicCard extends StatelessWidget {
     required this.controller,
     required this.isEditing,
     this.onChanged,
-    this.isHighGI = false,
+    this.isGlycemicIndex = true,
   });
+
+  Color _getColor() {
+    if (isGlycemicIndex) {
+      // Glycemic Index: Low 0-55 (green), Medium 56-69 (yellow), High 70+ (red)
+      if (value <= 55) return AppColors.success;
+      if (value <= 69) return AppColors.warning;
+      return AppColors.error;
+    } else {
+      // Glycemic Load: Low 0-10 (green), Medium 11-19 (yellow), High 20+ (red)
+      if (value <= 10) return AppColors.success;
+      if (value <= 19) return AppColors.warning;
+      return AppColors.error;
+    }
+  }
+
+  bool _isHighValue() {
+    if (isGlycemicIndex) {
+      return value >= 70;
+    } else {
+      return value >= 20;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final color = isHighGI ? AppColors.warning : AppColors.success;
+    final color = _getColor();
+    final isHigh = _isHighValue();
 
     return Card(
       color: color.withValues(alpha: 0.1),
@@ -1195,7 +1219,7 @@ class _GlycemicCard extends StatelessWidget {
                       color: color,
                     ),
                   ),
-                  if (isHighGI) ...[
+                  if (isHigh) ...[
                     const SizedBox(width: 4),
                     Icon(Icons.arrow_upward, size: 16, color: color),
                   ],

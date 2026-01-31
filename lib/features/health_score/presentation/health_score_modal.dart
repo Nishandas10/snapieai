@@ -104,6 +104,16 @@ class HealthScoreModal extends ConsumerWidget {
               ),
             ),
 
+            // Habit building message
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _HabitBuilderMessage(
+                score: totalScore,
+                streak: score.streak,
+                itemsLogged: score.breakdown.macroBalanceScore > 0,
+              ),
+            ),
+
             // Breakdown section
             Padding(
               padding: const EdgeInsets.all(16),
@@ -134,7 +144,7 @@ class HealthScoreModal extends ConsumerWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'You could reach ${potentialScore.toInt()} with a few changes!',
+                              'Log more meals to reach ${potentialScore.toInt()}!',
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: AppColors.success,
@@ -393,6 +403,127 @@ class MorningBriefingDialog extends ConsumerWidget {
       return 'Good effort yesterday! A few small tweaks and you\'ll hit that elite zone. You\'ve got this! 💪';
     }
     return 'Every day is a fresh start! Today is your chance to make healthier choices. Let\'s do this! 🌟';
+  }
+}
+
+/// Habit builder message widget
+class _HabitBuilderMessage extends StatelessWidget {
+  final double score;
+  final int streak;
+  final bool itemsLogged;
+
+  const _HabitBuilderMessage({
+    required this.score,
+    required this.streak,
+    required this.itemsLogged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (message, icon, color) = _getMessage();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 24)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 13,
+                color: color,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  (String, String, Color) _getMessage() {
+    // No items logged yet
+    if (!itemsLogged || score == 0) {
+      return (
+        'Start your day strong! Log your first meal to begin building your health score.',
+        '🌅',
+        AppColors.info,
+      );
+    }
+
+    // Score-based messages with streak consideration
+    if (score >= 80) {
+      if (streak >= 7) {
+        return (
+          'You\'re on a ${streak}-day streak! Champion-level consistency. Keep it up!',
+          '🏆',
+          AppColors.success,
+        );
+      } else if (streak >= 3) {
+        return (
+          '${streak} days strong! You\'re building great habits. Almost at a week!',
+          '🔥',
+          AppColors.success,
+        );
+      }
+      return (
+        'Amazing score! Keep logging to build your streak and maintain these results.',
+        '⭐',
+        AppColors.success,
+      );
+    }
+
+    if (score >= 65) {
+      if (streak >= 3) {
+        return (
+          'Great ${streak}-day streak! Small improvements each day = big results.',
+          '📈',
+          AppColors.success,
+        );
+      }
+      return (
+        'You\'re doing great! Log consistently to build momentum and improve your score.',
+        '💪',
+        AppColors.success,
+      );
+    }
+
+    if (score >= 50) {
+      if (streak >= 2) {
+        return (
+          '${streak} days logged! Keep the streak alive - you\'re building momentum.',
+          '🚀',
+          AppColors.warning,
+        );
+      }
+      return (
+        'Good start! Log all your meals today to see your score climb.',
+        '🌱',
+        AppColors.warning,
+      );
+    }
+
+    if (score >= 30) {
+      return (
+        'Every meal logged is progress! Add more meals to boost your score.',
+        '🎯',
+        AppColors.warning,
+      );
+    }
+
+    return (
+      'Log your meals to start tracking your nutrition journey!',
+      '✨',
+      AppColors.info,
+    );
   }
 }
 
