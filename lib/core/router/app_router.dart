@@ -38,6 +38,7 @@ import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/settings/presentation/health_settings_screen.dart';
 import '../../features/history/presentation/history_screen.dart';
 import '../../features/subscription/presentation/paywall_screen.dart';
+import '../../features/subscription/presentation/onboarding_paywall_screen.dart';
 import '../../features/barcode/presentation/barcode_scanner_screen.dart';
 import '../../features/voice/presentation/voice_input_screen.dart';
 import '../../features/health_score/presentation/health_score_detail_screen.dart';
@@ -81,6 +82,7 @@ class AppRoutes {
   static const String barcodeScanner = '/barcode-scanner';
   static const String voiceInput = '/voice-input';
   static const String healthScoreDetail = '/health-score-detail';
+  static const String onboardingPaywall = '/onboarding-paywall';
 }
 
 /// Provider for GoRouter
@@ -319,6 +321,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.healthScoreDetail,
         name: 'healthScoreDetail',
         builder: (context, state) => const HealthScoreDetailScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.onboardingPaywall,
+        name: 'onboardingPaywall',
+        builder: (context, state) => const OnboardingPaywallScreen(),
       ),
     ],
     redirect: (context, state) {

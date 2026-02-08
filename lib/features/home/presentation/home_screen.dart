@@ -6,10 +6,9 @@ import 'package:intl/intl.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/providers.dart';
+import '../../../core/providers/health_score_provider.dart';
 import '../../../core/widgets/nutrition_widgets.dart';
-import '../../../core/widgets/health_score_widgets.dart';
 import '../../../core/models/daily_log.dart';
-import '../../health_score/presentation/health_score_modal.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -19,69 +18,13 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _hasShownMorningBriefing = false;
-  bool _hasShownAppOpenModal = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkMorningBriefing();
-      // Check immediately after frame if state is already ready
-      final healthState = ref.read(healthScoreProvider);
-      if (healthState.showAppOpenModal) {
-        _showAppOpenModal();
-      }
-    });
-  }
-
-  void _checkMorningBriefing() {
-    if (_hasShownMorningBriefing) return;
-
-    final healthState = ref.read(healthScoreProvider);
-    if (healthState.showMorningBriefing && healthState.yesterdayScore != null) {
-      _hasShownMorningBriefing = true;
-      showMorningBriefingDialog(context);
-    }
-  }
-
-  void _showAppOpenModal() {
-    if (_hasShownAppOpenModal) return;
-    if (_hasShownMorningBriefing) return;
-
-    _hasShownAppOpenModal = true;
-
-    // Show the health score modal on app open
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        showHealthScoreModal(
-          context,
-          onViewDetails: () {
-            // Navigate using router provider to avoid context issues in dialog callback
-            ref.read(appRouterProvider).push(AppRoutes.healthScoreDetail);
-          },
-        );
-        ref.read(healthScoreProvider.notifier).dismissAppOpenModal();
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Listen for changes to showAppOpenModal (e.g. if provider loads after init)
-    ref.listen(healthScoreProvider, (previous, next) {
-      if (next.showMorningBriefing && next.yesterdayScore != null) {
-        _checkMorningBriefing();
-      } else if (next.showAppOpenModal && !next.isLoading) {
-        _showAppOpenModal();
-      }
-    });
     final profile = ref.watch(userProfileProvider);
     final foodLogState = ref.watch(foodLogProvider);
     final todayLog = foodLogState.todayLog;
     final macros = ref.watch(todayMacrosProvider);
-    final healthScore = ref.watch(currentHealthScoreProvider);
-    final healthState = ref.watch(healthScoreProvider);
+    final streak = ref.watch(healthStreakProvider);
 
     final calorieTarget = profile?.dailyCalorieTarget ?? 2000;
     final proteinTarget = profile?.macroTargets.proteinGrams ?? 150;
@@ -128,13 +71,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         Row(
                           children: [
-                            // Health Score Indicator (replacing chat icon)
-                            HealthScoreIndicator(
-                              score: healthScore,
-                              onTap: () =>
-                                  context.push(AppRoutes.healthScoreDetail),
-                            ),
-                            const SizedBox(width: 12),
+                            // Streak indicator
+                            if (streak > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      '🔥',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$streak',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.accent,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (streak > 0) const SizedBox(width: 12),
+                            // Profile avatar
                             GestureDetector(
                               onTap: () => context.go(AppRoutes.settings),
                               child: CircleAvatar(
@@ -158,43 +128,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textHint,
-                          ),
-                        ),
-                        if (healthState.todayScore?.streak != null &&
-                            healthState.todayScore!.streak > 1) ...[
-                          const SizedBox(width: 8),
-                          StreakBadge(
-                            streak: healthState.todayScore!.streak,
-                            compact: true,
-                          ),
-                        ],
-                      ],
+                    Text(
+                      DateFormat('EEEE, MMMM d').format(DateTime.now()),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textHint,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-
-            // Morning Briefing Card (if yesterday's score is available but briefing was dismissed)
-            if (healthState.yesterdayScore != null &&
-                !healthState.showMorningBriefing &&
-                DateTime.now().hour < 12)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: MorningBriefingCard(
-                    yesterdayScore: healthState.yesterdayScore!.totalScore,
-                    streak: healthState.todayScore?.streak ?? 0,
-                  ),
-                ),
-              ),
 
             // Macro Summary Card
             SliverToBoxAdapter(

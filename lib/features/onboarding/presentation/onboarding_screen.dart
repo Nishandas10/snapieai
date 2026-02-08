@@ -32,6 +32,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       color: AppColors.secondary,
     ),
     OnboardingPage(
+      title: 'Goal-Aware Tracking',
+      description:
+          'Whether you\'re losing weight or building muscle, track daily progress toward your goals. Get personalized calorie and macro targets that adapt to your journey.',
+      icon: Icons.track_changes_rounded,
+      color: AppColors.success,
+    ),
+    OnboardingPage(
       title: 'Health-Aware Tracking',
       description:
           'Track glycemic index, sodium, and sugar levels. Perfect for managing diabetes, blood pressure, PCOS, and other health conditions.',

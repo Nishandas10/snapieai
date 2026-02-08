@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/subscription_service.dart';
+
+/// Tracks if paywall has been shown this app session (in-memory, resets on app restart)
+bool _hasShownPaywallThisSession = false;
 
 class MainNavigationScreen extends ConsumerStatefulWidget {
   final Widget child;
@@ -25,6 +29,50 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     AppRoutes.mealPlan,
     AppRoutes.settings,
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showPaywallOncePerSession();
+    });
+  }
+
+  Future<void> _showPaywallOncePerSession() async {
+    // Only show once per app session
+    if (_hasShownPaywallThisSession) return;
+
+    // Wait for subscription state to finish loading
+    final subscription = ref.read(subscriptionProvider);
+
+    // If still loading, wait a bit and re-check
+    if (subscription.isLoading) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      // Re-read after waiting
+      final updatedSubscription = ref.read(subscriptionProvider);
+      if (updatedSubscription.isPremium) return;
+    } else {
+      // Not loading - check directly
+      if (subscription.isPremium) return;
+    }
+
+    // Double-check by refreshing subscription status from Firestore/Adapty
+    await ref.read(subscriptionProvider.notifier).refresh();
+    if (!mounted) return;
+
+    // Final check after refresh
+    final finalSubscription = ref.read(subscriptionProvider);
+    if (finalSubscription.isPremium) return;
+
+    // Mark as shown for this session
+    _hasShownPaywallThisSession = true;
+
+    if (mounted) {
+      context.push(AppRoutes.onboardingPaywall);
+    }
+  }
 
   @override
   void didChangeDependencies() {

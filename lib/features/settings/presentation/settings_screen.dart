@@ -94,7 +94,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     if (!subscription.isPremium)
                       Text(
-                        '${subscription.remainingAIScans}/${FreeTierLimits.maxAIScans} AI scans • ${subscription.remainingChatMessages}/${FreeTierLimits.maxChatMessages} chats',
+                        '${subscription.remainingAIScans}/${FreeTierLimits.dailyAIScans} daily scan • ${subscription.remainingChatMessages}/${FreeTierLimits.dailyChatMessages} daily chat',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,

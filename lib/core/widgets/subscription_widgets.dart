@@ -121,8 +121,8 @@ class RemainingCreditsChip extends ConsumerWidget {
         ? subscription.remainingAIScans
         : subscription.remainingChatMessages;
     final max = type == 'scan'
-        ? FreeTierLimits.maxAIScans
-        : FreeTierLimits.maxChatMessages;
+        ? FreeTierLimits.dailyAIScans
+        : FreeTierLimits.dailyChatMessages;
 
     final color = remaining > 0 ? AppColors.textSecondary : AppColors.error;
 
@@ -133,7 +133,7 @@ class RemainingCreditsChip extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        '$remaining/$max free',
+        '$remaining/$max daily',
         style: TextStyle(
           fontSize: 12,
           color: color,

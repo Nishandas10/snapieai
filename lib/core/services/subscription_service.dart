@@ -7,53 +7,82 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Subscription status enum
 enum SubscriptionStatus { free, premium }
 
-/// Free tier limits
+/// Free tier limits - daily allowance that resets at midnight
 class FreeTierLimits {
-  static const int maxAIScans = 2;
-  static const int maxChatMessages = 3;
+  static const int dailyAIScans = 1;
+  static const int dailyChatMessages = 1;
 }
 
 /// User subscription state
 class SubscriptionState {
   final SubscriptionStatus status;
-  final int aiScansUsed;
-  final int chatMessagesUsed;
+  final int aiScansUsedToday;
+  final int chatMessagesUsedToday;
+  final DateTime? lastUsageDate; // Track when usage was last recorded
   final DateTime? premiumExpiresAt;
   final bool isLoading;
 
   const SubscriptionState({
     this.status = SubscriptionStatus.free,
-    this.aiScansUsed = 0,
-    this.chatMessagesUsed = 0,
+    this.aiScansUsedToday = 0,
+    this.chatMessagesUsedToday = 0,
+    this.lastUsageDate,
     this.premiumExpiresAt,
     this.isLoading = false,
   });
 
   bool get isPremium => status == SubscriptionStatus.premium;
 
-  bool get canUseAIScan => isPremium || aiScansUsed < FreeTierLimits.maxAIScans;
+  /// Check if usage should be reset (new day)
+  bool get _shouldResetUsage {
+    if (lastUsageDate == null) return false;
+    final now = DateTime.now();
+    final lastDate = lastUsageDate!;
+    // Reset if it's a different day
+    return now.year != lastDate.year ||
+        now.month != lastDate.month ||
+        now.day != lastDate.day;
+  }
+
+  /// Get effective AI scans used (reset if new day)
+  int get effectiveAIScansUsed => _shouldResetUsage ? 0 : aiScansUsedToday;
+
+  /// Get effective chat messages used (reset if new day)
+  int get effectiveChatMessagesUsed =>
+      _shouldResetUsage ? 0 : chatMessagesUsedToday;
+
+  bool get canUseAIScan =>
+      isPremium || effectiveAIScansUsed < FreeTierLimits.dailyAIScans;
 
   bool get canUseChat =>
-      isPremium || chatMessagesUsed < FreeTierLimits.maxChatMessages;
+      isPremium || effectiveChatMessagesUsed < FreeTierLimits.dailyChatMessages;
 
   int get remainingAIScans =>
-      isPremium ? -1 : FreeTierLimits.maxAIScans - aiScansUsed;
+      isPremium ? -1 : FreeTierLimits.dailyAIScans - effectiveAIScansUsed;
 
-  int get remainingChatMessages =>
-      isPremium ? -1 : FreeTierLimits.maxChatMessages - chatMessagesUsed;
+  int get remainingChatMessages => isPremium
+      ? -1
+      : FreeTierLimits.dailyChatMessages - effectiveChatMessagesUsed;
+
+  // Legacy getters for backward compatibility
+  int get aiScansUsed => effectiveAIScansUsed;
+  int get chatMessagesUsed => effectiveChatMessagesUsed;
 
   SubscriptionState copyWith({
     SubscriptionStatus? status,
-    int? aiScansUsed,
-    int? chatMessagesUsed,
+    int? aiScansUsedToday,
+    int? chatMessagesUsedToday,
+    DateTime? lastUsageDate,
     DateTime? premiumExpiresAt,
     bool clearExpiresAt = false, // Flag to explicitly clear the expiry date
     bool? isLoading,
   }) {
     return SubscriptionState(
       status: status ?? this.status,
-      aiScansUsed: aiScansUsed ?? this.aiScansUsed,
-      chatMessagesUsed: chatMessagesUsed ?? this.chatMessagesUsed,
+      aiScansUsedToday: aiScansUsedToday ?? this.aiScansUsedToday,
+      chatMessagesUsedToday:
+          chatMessagesUsedToday ?? this.chatMessagesUsedToday,
+      lastUsageDate: lastUsageDate ?? this.lastUsageDate,
       premiumExpiresAt: clearExpiresAt
           ? null
           : (premiumExpiresAt ?? this.premiumExpiresAt),
@@ -208,8 +237,9 @@ class SubscriptionService {
       await _userDoc(userId).set({
         'subscription': {
           'status': 'free',
-          'aiScansUsed': 0,
-          'chatMessagesUsed': 0,
+          'aiScansUsedToday': 0,
+          'chatMessagesUsedToday': 0,
+          'lastUsageDate': FieldValue.serverTimestamp(),
           'premiumExpiresAt': null,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
@@ -223,6 +253,15 @@ class SubscriptionService {
     }
   }
 
+  /// Check if the stored date is from a previous day (needs reset)
+  static bool _isNewDay(DateTime? lastUsageDate) {
+    if (lastUsageDate == null) return true;
+    final now = DateTime.now();
+    return now.year != lastUsageDate.year ||
+        now.month != lastUsageDate.month ||
+        now.day != lastUsageDate.day;
+  }
+
   /// Get subscription state from Firestore
   static Future<SubscriptionState> getSubscriptionState(String userId) async {
     try {
@@ -231,7 +270,7 @@ class SubscriptionService {
 
       if (data == null || data['subscription'] == null) {
         await initUserSubscription(userId);
-        return const SubscriptionState();
+        return SubscriptionState(lastUsageDate: DateTime.now());
       }
 
       final subscription = data['subscription'] as Map<String, dynamic>;
@@ -249,19 +288,53 @@ class SubscriptionService {
         }
       }
 
+      // Parse lastUsageDate
+      DateTime? lastUsageDate;
+      final lastUsageDateData = subscription['lastUsageDate'];
+      if (lastUsageDateData != null && lastUsageDateData is Timestamp) {
+        lastUsageDate = lastUsageDateData.toDate();
+      }
+
+      // Check if we need to reset usage (new day)
+      int aiScansUsedToday =
+          subscription['aiScansUsedToday'] ??
+          subscription['aiScansUsed'] ??
+          0; // Support legacy field
+      int chatMessagesUsedToday =
+          subscription['chatMessagesUsedToday'] ??
+          subscription['chatMessagesUsed'] ??
+          0; // Support legacy field
+
+      if (_isNewDay(lastUsageDate)) {
+        // Reset usage for new day
+        aiScansUsedToday = 0;
+        chatMessagesUsedToday = 0;
+        lastUsageDate = DateTime.now();
+
+        // Update Firestore with reset values
+        await _userDoc(userId).update({
+          'subscription.aiScansUsedToday': 0,
+          'subscription.chatMessagesUsedToday': 0,
+          'subscription.lastUsageDate': FieldValue.serverTimestamp(),
+          'subscription.updatedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint('[SubscriptionService] Daily usage reset for new day');
+      }
+
       debugPrint(
-        '[SubscriptionService] Firestore state - status: $statusStr, aiScans: ${subscription['aiScansUsed']}, chatMessages: ${subscription['chatMessagesUsed']}, expiresAt: $expiresAt',
+        '[SubscriptionService] Firestore state - status: $statusStr, aiScans: $aiScansUsedToday, chatMessages: $chatMessagesUsedToday, lastUsageDate: $lastUsageDate, expiresAt: $expiresAt',
       );
 
       return SubscriptionState(
         status: status,
-        aiScansUsed: subscription['aiScansUsed'] ?? 0,
-        chatMessagesUsed: subscription['chatMessagesUsed'] ?? 0,
+        aiScansUsedToday: aiScansUsedToday,
+        chatMessagesUsedToday: chatMessagesUsedToday,
+        lastUsageDate: lastUsageDate ?? DateTime.now(),
         premiumExpiresAt: expiresAt,
       );
     } catch (e) {
       debugPrint('[SubscriptionService] Failed to get subscription state: $e');
-      return const SubscriptionState();
+      return SubscriptionState(lastUsageDate: DateTime.now());
     }
   }
 
@@ -269,7 +342,8 @@ class SubscriptionService {
   static Future<void> incrementAIScanUsage(String userId) async {
     try {
       await _userDoc(userId).update({
-        'subscription.aiScansUsed': FieldValue.increment(1),
+        'subscription.aiScansUsedToday': FieldValue.increment(1),
+        'subscription.lastUsageDate': FieldValue.serverTimestamp(),
         'subscription.updatedAt': FieldValue.serverTimestamp(),
       });
       debugPrint('[SubscriptionService] AI scan usage incremented');
@@ -282,7 +356,8 @@ class SubscriptionService {
   static Future<void> incrementChatUsage(String userId) async {
     try {
       await _userDoc(userId).update({
-        'subscription.chatMessagesUsed': FieldValue.increment(1),
+        'subscription.chatMessagesUsedToday': FieldValue.increment(1),
+        'subscription.lastUsageDate': FieldValue.serverTimestamp(),
         'subscription.updatedAt': FieldValue.serverTimestamp(),
       });
       debugPrint('[SubscriptionService] Chat usage incremented');
@@ -448,7 +523,10 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
 
     if (!state.isPremium) {
       await SubscriptionService.incrementAIScanUsage(user.uid);
-      state = state.copyWith(aiScansUsed: state.aiScansUsed + 1);
+      state = state.copyWith(
+        aiScansUsedToday: state.effectiveAIScansUsed + 1,
+        lastUsageDate: DateTime.now(),
+      );
     }
 
     return true;
@@ -465,7 +543,10 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
 
     if (!state.isPremium) {
       await SubscriptionService.incrementChatUsage(user.uid);
-      state = state.copyWith(chatMessagesUsed: state.chatMessagesUsed + 1);
+      state = state.copyWith(
+        chatMessagesUsedToday: state.effectiveChatMessagesUsed + 1,
+        lastUsageDate: DateTime.now(),
+      );
     }
 
     return true;

@@ -6,21 +6,24 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/subscription_service.dart';
 
-class PaywallScreen extends ConsumerStatefulWidget {
-  final String? featureType; // 'camera', 'ai_text', 'chat'
-
-  const PaywallScreen({super.key, this.featureType});
+/// Paywall shown to first-time users right after onboarding.
+/// Emphasises 3-day free trial, cancel-anytime, and shows
+/// Monthly / Quarterly / Annual plans.
+class OnboardingPaywallScreen extends ConsumerStatefulWidget {
+  const OnboardingPaywallScreen({super.key});
 
   @override
-  ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
+  ConsumerState<OnboardingPaywallScreen> createState() =>
+      _OnboardingPaywallScreenState();
 }
 
-class _PaywallScreenState extends ConsumerState<PaywallScreen> {
+class _OnboardingPaywallScreenState
+    extends ConsumerState<OnboardingPaywallScreen> {
   List<AdaptyPaywallProduct> _products = [];
   bool _isLoading = true;
   bool _isPurchasing = false;
   String? _error;
-  int _selectedProductIndex = 0;
+  int _selectedProductIndex = -1; // -1 means nothing selected yet
   double? _monthlyPricePerMonth; // Used for discount calculation
 
   @override
@@ -42,21 +45,19 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           paywall,
         );
 
-        // Filter out weekly subscriptions, keep monthly, quarterly, yearly
+        // Keep only monthly, quarterly and yearly – drop weekly
         final filteredProducts = allProducts.where((product) {
-          final subscription = product.subscription;
-          if (subscription == null)
-            return true; // Keep non-subscription products
-
-          final period = subscription.period;
-          // Exclude weekly (period.unit == week)
-          return period.unit != AdaptyPeriodUnit.week;
+          final sub = product.subscription;
+          if (sub == null) return false;
+          final period = sub.period;
+          if (period.unit == AdaptyPeriodUnit.week) return false;
+          return true;
         }).toList();
 
-        // Sort: monthly first, then quarterly, then yearly
+        // Sort: monthly first, then quarterly, then yearly (shortest first)
         filteredProducts.sort((a, b) {
-          final aDays = _periodToDays(a.subscription?.period);
-          final bDays = _periodToDays(b.subscription?.period);
+          final aDays = _periodToDays(a.subscription!.period);
+          final bDays = _periodToDays(b.subscription!.period);
           return aDays.compareTo(bDays);
         });
 
@@ -72,19 +73,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           }
         }
 
-        // Pre-select quarterly if available
-        int defaultIndex = 0;
-        for (int i = 0; i < filteredProducts.length; i++) {
-          if (_isQuarterly(filteredProducts[i])) {
-            defaultIndex = i;
-            break;
-          }
-        }
-
         setState(() {
           _products = filteredProducts;
           _monthlyPricePerMonth = monthlyPrice;
-          _selectedProductIndex = defaultIndex;
+          // Pre-select quarterly if present, otherwise yearly
+          _selectedProductIndex = _findDefaultIndex(filteredProducts);
           _isLoading = false;
         });
       } else {
@@ -95,14 +88,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to load subscription options: $e';
+        _error = 'Failed to load subscription options';
         _isLoading = false;
       });
     }
   }
 
-  int _periodToDays(AdaptySubscriptionPeriod? period) {
-    if (period == null) return 0;
+  int _periodToDays(AdaptySubscriptionPeriod period) {
     switch (period.unit) {
       case AdaptyPeriodUnit.day:
         return period.numberOfUnits;
@@ -166,8 +158,25 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     return discountPercent > 0 ? discountPercent : null;
   }
 
+  int _findDefaultIndex(List<AdaptyPaywallProduct> products) {
+    // Try to find quarterly first
+    for (int i = 0; i < products.length; i++) {
+      if (_isQuarterly(products[i])) {
+        return i;
+      }
+    }
+    // Fallback to yearly
+    for (int i = 0; i < products.length; i++) {
+      final sub = products[i].subscription;
+      if (sub != null && sub.period.unit == AdaptyPeriodUnit.year) {
+        return i;
+      }
+    }
+    return products.isNotEmpty ? 0 : -1;
+  }
+
   Future<void> _makePurchase() async {
-    if (_products.isEmpty || _isPurchasing) return;
+    if (_products.isEmpty || _isPurchasing || _selectedProductIndex < 0) return;
 
     setState(() => _isPurchasing = true);
 
@@ -181,11 +190,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Welcome to Premium! Enjoy unlimited access.'),
+            content: Text('🎉 Welcome! Your 3-day free trial has started.'),
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop(true); // Return true to indicate purchase success
+        context.pop(true);
       }
     } catch (e) {
       if (mounted) {
@@ -246,37 +255,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
   }
 
-  String _getHeaderTitle() {
-    switch (widget.featureType) {
-      case 'camera':
-        return 'Unlock AI Food Scanner';
-      case 'ai_text':
-        return 'Unlock AI Analysis';
-      case 'chat':
-        return 'Unlock Sara AI Assistant';
-      default:
-        return 'Upgrade to Premium';
-    }
-  }
-
-  String _getHeaderSubtitle() {
-    final subscription = ref.read(subscriptionProvider);
-    switch (widget.featureType) {
-      case 'camera':
-        return 'You\'ve used your daily free AI scan';
-      case 'ai_text':
-        return 'You\'ve used your daily free AI analysis';
-      case 'chat':
-        return 'You\'ve used your daily free chat message';
-      default:
-        if (!subscription.canUseAIScan) {
-          return 'Daily AI scan used — resets at midnight';
-        } else if (!subscription.canUseChat) {
-          return 'Daily chat message used — resets at midnight';
-        }
-        return 'Get unlimited access to all features';
-    }
-  }
+  // ──────────────────── UI ────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -285,17 +264,25 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Close button
+            // Close / Skip button
             Align(
               alignment: Alignment.topRight,
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: IconButton(
-                  onPressed: () => context.pop(false),
-                  icon: const Icon(Icons.close),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.cardBackground,
-                    shape: const CircleBorder(),
+                padding: const EdgeInsets.all(12),
+                child: GestureDetector(
+                  onTap: () => context.pop(false),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -347,70 +334,64 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          // Premium badge
+          // ── Hero illustration ──
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            width: 100,
+            height: 100,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.star, color: Colors.white, size: 18),
-                SizedBox(width: 6),
-                Text(
-                  'PREMIUM',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFD700).withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
                 ),
               ],
+            ),
+            child: const Icon(
+              Icons.workspace_premium_rounded,
+              size: 52,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 24),
 
-          // Header
-          Text(
-            _getHeaderTitle(),
+          // ── Title ──
+          const Text(
+            'Try Premium Free\nfor 3 Days',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
+              height: 1.2,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            _getHeaderSubtitle(),
+          const Text(
+            'Unlock everything. Cancel anytime.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
-          // Features list
+          // ── Features ──
           _buildFeaturesList(),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
-          // Products
+          // ── Plan cards ──
           if (_products.isNotEmpty) ...[
             ..._products.asMap().entries.map((entry) {
-              return _buildProductCard(
-                entry.value,
-                entry.key,
-                entry.key == _selectedProductIndex,
-              );
+              return _buildPlanCard(entry.value, entry.key);
             }),
             const SizedBox(height: 24),
 
-            // Purchase button
+            // ── CTA button ──
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -434,7 +415,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                         ),
                       )
                     : const Text(
-                        'Start Premium',
+                        'Start Free Trial',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -442,9 +423,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Restore purchases
+            // ── Restore ──
             TextButton(
               onPressed: _isPurchasing ? null : _restorePurchases,
               child: const Text(
@@ -455,13 +436,15 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
 
-            // Terms
-            Text(
-              'Auto-renewable subscription. Cancel anytime.',
+            // ── Legal fine print ──
+            const Text(
+              'Auto-renewable subscription. Cancel anytime from your device settings. '
+              'Payment will be charged to your account after the 3-day free trial. '
+              'Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.textHint),
+              style: TextStyle(fontSize: 11, color: AppColors.textHint),
             ),
             const SizedBox(height: 32),
           ],
@@ -470,158 +453,108 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
+  // ──────────────────── Features list ────────────────────
+
   Widget _buildFeaturesList() {
-    final features = [
-      _FeatureItem(
-        icon: Icons.camera_alt,
-        title: 'Unlimited AI Food Scans',
-        description: 'Snap photos for instant nutrition analysis',
-      ),
-      _FeatureItem(
-        icon: Icons.auto_awesome,
-        title: 'Unlimited AI Text Analysis',
-        description: 'Describe any food for AI-powered insights',
-      ),
-      _FeatureItem(
-        icon: Icons.chat_bubble_outline,
-        title: 'Unlimited Sara AI Chat',
-        description: 'Get personalized nutrition advice 24/7',
-      ),
-      _FeatureItem(
-        icon: Icons.restaurant_menu,
-        title: 'Smart Meal Planning',
-        description: 'AI-generated meal plans tailored to you',
-      ),
-      _FeatureItem(
-        icon: Icons.insights,
-        title: 'Advanced Analytics',
-        description: 'Deep insights into your nutrition habits',
-      ),
+    const features = [
+      ('📸', 'Unlimited AI Food Scans'),
+      ('🤖', 'Unlimited Sara AI Chat'),
+      ('🎯', 'Personalized Meal Plans'),
+      ('📊', 'Advanced Nutrition Analytics'),
+      ('🔔', 'Smart Meal Reminders'),
     ];
 
     return Column(
-      children: features.map((feature) => _buildFeatureRow(feature)).toList(),
+      children: features
+          .map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Text(f.$1, style: const TextStyle(fontSize: 22)),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      f.$2,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.check_circle,
+                    color: AppColors.success,
+                    size: 22,
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
-  Widget _buildFeatureRow(_FeatureItem feature) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(feature.icon, color: AppColors.primary, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  feature.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  feature.description,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.check_circle, color: AppColors.success, size: 24),
-        ],
-      ),
-    );
-  }
+  // ──────────────────── Plan card ────────────────────
 
-  Widget _buildProductCard(
-    AdaptyPaywallProduct product,
-    int index,
-    bool isSelected,
-  ) {
+  Widget _buildPlanCard(AdaptyPaywallProduct product, int index) {
+    final isSelected = index == _selectedProductIndex;
     final price = product.price.localizedString ?? 'N/A';
     final priceAmount = product.price.amount;
-    final subscription = product.subscription;
-    String periodText = 'Subscription';
-    String subText = '';
+    final subscription = product.subscription!;
+    final period = subscription.period;
+    final isQuarterly = _isQuarterly(product);
+    final discount = _calculateDiscount(product);
+
+    String label;
+    String subLabel = '';
     String pricePerMonthText = '';
     bool isBestValue = false;
     bool isMostPopular = false;
     bool isMonthly = false;
-    bool hasFreeTrial = false;
-    final isQuarterly = _isQuarterly(product);
-    final discount = _calculateDiscount(product);
 
-    if (subscription != null) {
-      final period = subscription.period;
-      switch (period.unit) {
-        case AdaptyPeriodUnit.week:
-          periodText = period.numberOfUnits == 1
-              ? 'Weekly'
-              : '${period.numberOfUnits} Weeks';
-          break;
-        case AdaptyPeriodUnit.month:
-          if (isQuarterly) {
-            periodText = 'Quarterly';
-            isMostPopular = true; // Quarterly is MOST POPULAR
-            // Calculate per month price
-            final perMonth = priceAmount / 3;
-            pricePerMonthText =
-                '${_formatPrice(perMonth, product.price.currencyCode)}/mo';
-            subText = discount != null && discount > 0
-                ? 'Save $discount% • Billed quarterly'
-                : 'Billed quarterly';
-          } else if (period.numberOfUnits == 1) {
-            periodText = 'Monthly';
-            isMonthly = true;
-            subText = 'EARLY BIRD OFFER';
-          } else {
-            periodText = '${period.numberOfUnits} Months';
-          }
-          break;
-        case AdaptyPeriodUnit.year:
-          periodText = 'Annual';
-          isBestValue = true; // Annual is BEST VALUE
+    switch (period.unit) {
+      case AdaptyPeriodUnit.month:
+        if (isQuarterly) {
+          label = 'Quarterly';
+          isMostPopular = true; // Quarterly is MOST POPULAR
           // Calculate per month price
-          final perMonth = priceAmount / 12;
+          final perMonth = priceAmount / 3;
           pricePerMonthText =
               '${_formatPrice(perMonth, product.price.currencyCode)}/mo';
-          subText = discount != null && discount > 0
-              ? 'Save $discount% • Billed annually'
-              : 'Billed annually';
-          break;
-        default:
-          periodText = 'Subscription';
-      }
-
-      // Check for free trial
-      final offer = subscription.offer;
-      if (offer != null) {
-        for (final phase in offer.phases) {
-          if (phase.price.amount == 0) {
-            hasFreeTrial = true;
-            break;
-          }
+          subLabel = discount != null && discount > 0
+              ? 'Save $discount% • Billed quarterly'
+              : 'Billed quarterly';
+        } else if (period.numberOfUnits == 1) {
+          label = 'Monthly';
+          isMonthly = true;
+          subLabel = 'EARLY BIRD OFFER';
+        } else {
+          label = '${period.numberOfUnits} Months';
+          subLabel = '';
         }
-      }
+        break;
+      case AdaptyPeriodUnit.year:
+        label = 'Annual';
+        isBestValue = true; // Annual is BEST VALUE
+        // Calculate per month price
+        final perMonth = priceAmount / 12;
+        pricePerMonthText =
+            '${_formatPrice(perMonth, product.price.currencyCode)}/mo';
+        subLabel = discount != null && discount > 0
+            ? 'Save $discount% • Billed annually'
+            : 'Billed annually';
+        break;
+      default:
+        label = 'Subscription';
+        subLabel = '';
     }
 
     return GestureDetector(
       onTap: () => setState(() => _selectedProductIndex = index),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -634,15 +567,16 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
                 ]
               : null,
         ),
         child: Row(
           children: [
+            // Radio indicator
             Container(
               width: 24,
               height: 24,
@@ -658,7 +592,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   ? const Icon(Icons.check, color: Colors.white, size: 16)
                   : null,
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
+
+            // Label + sub-label
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -666,7 +602,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   Row(
                     children: [
                       Text(
-                        periodText,
+                        label,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -725,11 +661,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.warning.withOpacity(0.15),
+                        color: AppColors.warning.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        subText,
+                        subLabel,
                         style: TextStyle(
                           color: AppColors.warning,
                           fontSize: 10,
@@ -738,24 +674,21 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       ),
                     ),
                   ],
-                  if (!isMonthly && subText.isNotEmpty) ...[
+                  if (!isMonthly && subLabel.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
-                      subText,
+                      subLabel,
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
                       ),
                     ),
                   ],
-                  if (hasFreeTrial)
-                    Text(
-                      'Free trial available',
-                      style: TextStyle(fontSize: 12, color: AppColors.success),
-                    ),
                 ],
               ),
             ),
+
+            // Price
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -770,7 +703,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   ),
                   Text(
                     price,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
@@ -784,7 +717,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  Text(
+                  const Text(
                     '/month',
                     style: TextStyle(
                       fontSize: 12,
@@ -822,16 +755,4 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final symbol = symbols[currency] ?? '$currency ';
     return '$symbol${rounded.toStringAsFixed(2)}';
   }
-}
-
-class _FeatureItem {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  _FeatureItem({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
 }
